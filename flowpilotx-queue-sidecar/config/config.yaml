@@ -1,0 +1,18 @@
+queue:
+  host: "localhost"
+  port: 5672
+  username: "guest"
+  password: "guest"
+  queue_name: "http_requests"
+  exchange: ""
+  routing_key: "http_requests"
+
+http:
+  target_url: "http://localhost:8080/process"
+  timeout_seconds: 5
+  retry_attempts: 3
+  retry_delay_seconds: 1
+
+logging:
+  level: "info"
+  format: "json"

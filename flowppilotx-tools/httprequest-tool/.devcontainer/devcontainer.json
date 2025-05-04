@@ -1,0 +1,27 @@
+{
+    "name": "Go",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/go:1": {
+            "version": "1.24.2"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "golang.go",
+                "ms-azuretools.vscode-docker",
+                "eamodio.gitlens"
+            ],
+            "settings": {
+                "go.toolsManagement.checkForUpdates": "local",
+                "go.useLanguageServer": true,
+                "go.gopath": "/go"
+            }
+        }
+    },
+    "remoteUser": "vscode"
+} 
