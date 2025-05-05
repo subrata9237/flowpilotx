@@ -1,0 +1,42 @@
+FROM alpine:latest as certs
+RUN apk --update add ca-certificates
+FROM golang:1.24-alpine AS builder
+RUN apk update && apk add --no-cache git cmake curl
+# Set non-interactive environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    GIT_TERMINAL_PROMPT=0 \
+    GOPROXY=direct
+# Set environment variables for private repositories
+ENV GOPRIVATE="github.com"
+ENV GO111MODULE=on
+WORKDIR /go/src/github.com/flowpilotx
+ADD services ./services/
+ADD libs ./libs/
+ADD go.mod .
+ADD go.sum .
+ADD .dotnetenv .
+RUN go install github.com/swaggo/swag/v2/cmd/swag@latest
+RUN ls -la /go/src/github.com/flowpilotx/services/flowpilotx-tools/httprequest-tool
+#copy the source code
+#ARG GIT_TOKEN=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
+# Set up Git configuration directly
+#RUN git config --global url."https://${GIT_TOKEN}@github.com/".insteadOf "https://github.com/"
+RUN go mod tidy
+RUN go get github.com/swaggo/swag/v2
+WORKDIR /go/src/github.com/flowpilotx/services/flowpilotx-tools/httprequest-tool
+RUN swag init
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/build/httprequest-tool
+
+# Final stage
+FROM alpine:latest
+WORKDIR /app
+# Copy binary from builder
+COPY --from=builder /app/build/httprequest-tool /app/httprequest-tool
+# Expose port
+EXPOSE 8080
+# Set environment variables
+ENV TZ=UTC
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# Run the application
+ENTRYPOINT ["./httprequest-tool"] 

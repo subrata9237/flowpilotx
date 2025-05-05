@@ -1,0 +1,238 @@
+basePath: /api/v1
+definitions:
+  model.FileUpload:
+    properties:
+      content:
+        items:
+          type: integer
+        type: array
+      content_type:
+        type: string
+      field_name:
+        type: string
+      file_name:
+        type: string
+    type: object
+  model.HTTPRequest:
+    properties:
+      body: {}
+      files:
+        description: For file uploads
+        items:
+          $ref: '#/definitions/model.FileUpload'
+        type: array
+      form_data:
+        additionalProperties: true
+        description: For form data
+        type: object
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      method:
+        enum:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - HEAD
+        - OPTIONS
+        type: string
+      query_params:
+        additionalProperties:
+          type: string
+        type: object
+      retry_count:
+        type: integer
+      retry_delay:
+        description: delay in seconds
+        type: integer
+      timeout:
+        description: timeout in seconds
+        type: integer
+      url:
+        type: string
+    required:
+    - method
+    - url
+    type: object
+  model.HTTPResponse:
+    properties:
+      body:
+        description: Processed body (parsed JSON, XML, etc.)
+      content_type:
+        description: Response content type
+        type: string
+      error:
+        description: Error message if any
+        type: string
+      file_extension:
+        description: Detected file extension
+        type: string
+      format:
+        description: Detected format (json, xml, yaml, text, binary, etc.)
+        type: string
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      is_base64:
+        description: Whether the body is base64 encoded
+        type: boolean
+      raw_body:
+        description: Original raw response
+        items:
+          type: integer
+        type: array
+      response_time:
+        description: in seconds
+        type: number
+      size:
+        description: Size of the response in bytes
+        type: integer
+      status_code:
+        type: integer
+      text_encoding:
+        description: Text encoding if detected
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: A service for handling HTTP requests
+  title: HTTP Request Tool API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Get the health status of the service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Check service health
+      tags:
+      - health
+  /process:
+    post:
+      consumes:
+      - application/json
+      description: Process an HTTP request with the given parameters
+      parameters:
+      - description: HTTP request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.HTTPRequest'
+      produces:
+      - application/json
+      - application/xml
+      - text/plain
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.HTTPResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Process HTTP request
+      tags:
+      - request
+  /process/async:
+    post:
+      consumes:
+      - application/json
+      description: Process an HTTP request asynchronously and return a request ID
+      parameters:
+      - description: HTTP request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.HTTPRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Process HTTP request asynchronously
+      tags:
+      - request
+  /process/batch:
+    post:
+      consumes:
+      - application/json
+      description: Process multiple HTTP requests in batch
+      parameters:
+      - description: Array of HTTP request parameters
+        in: body
+        name: requests
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/model.HTTPRequest'
+          type: array
+      produces:
+      - application/json
+      - application/xml
+      - text/plain
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.HTTPResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Process multiple HTTP requests
+      tags:
+      - request
+swagger: "2.0"

@@ -1,0 +1,40 @@
+{
+  "language": "go",
+  "rules": {
+    "formatting": {
+      "indent": "tab",
+      "maxLineLength": 120,
+      "trailingComma": false,
+      "spacing": {
+        "afterKeyword": true,
+        "aroundOperators": true
+      }
+    },
+    "imports": {
+      "grouping": [
+        "std",
+        "external",
+        "internal"
+      ],
+      "sorting": "alphabetical"
+    },
+    "documentation": {
+      "requirePackageComments": true,
+      "requireFunctionComments": true,
+      "requireExportedComments": true
+    },
+    "testing": {
+      "namingPattern": "^Test[A-Z]",
+      "requireTestComments": true,
+      "parallelTests": true
+    },
+    "naming": {
+      "interfaces": "^[A-Z][a-zA-Z0-9]+$",
+      "types": "^[A-Z][a-zA-Z0-9]+$",
+      "constants": "^[A-Z][A-Z0-9_]*$",
+      "variables": "^[a-z][a-zA-Z0-9]*$",
+      "functions": "^[a-z][a-zA-Z0-9]*$",
+      "exportedSymbols": "^[A-Z][a-zA-Z0-9]+$"
+    }
+  }
+}

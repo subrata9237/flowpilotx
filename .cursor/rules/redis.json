@@ -1,0 +1,39 @@
+{
+  "scope": "sharedlib/redis",
+  "rules": {
+    "patterns": {
+      "clientOperations": {
+        "pattern": "^(Get|Set|Delete|Exists|HSet|HGet|LPush|RPush|SAdd|ZAdd)$",
+        "message": "Redis operation methods should follow standard naming"
+      },
+      "testHelpers": {
+        "pattern": "^(newTest|getTest)[A-Z][a-zA-Z0-9]*$",
+        "message": "Test helper functions should be prefixed with 'newTest' or 'getTest'"
+      },
+      "errorHandling": {
+        "pattern": "^Err[A-Z][a-zA-Z0-9]*$",
+        "message": "Error variables should be prefixed with 'Err'"
+      }
+    },
+    "testing": {
+      "helpers": {
+        "requireCleanup": true,
+        "namingPattern": "^test[A-Z][a-zA-Z0-9]*$"
+      },
+      "mocks": {
+        "useMiniredis": true,
+        "cleanupRequired": true
+      }
+    },
+    "documentation": {
+      "requireMethodComments": true,
+      "requireErrorDocumentation": true,
+      "requireConfigDocumentation": true
+    },
+    "configuration": {
+      "requireTimeouts": true,
+      "requireRetryConfig": true,
+      "requirePoolConfig": true
+    }
+  }
+}

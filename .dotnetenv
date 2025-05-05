@@ -1,0 +1,99 @@
+# =============================================================================
+# FlowPilot Environment Configuration
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Core Application Settings
+# -----------------------------------------------------------------------------
+# Environment mode (development/staging/production)
+export FLOWPILOT_ENV=development
+
+# Development Server Ports
+export FLOWPILOT_API_PORT_DEVELOPMENT=8080          # Main API server port
+export FLOWPILOT_METRICS_PORT_DEVELOPMENT=9090      # Prometheus metrics port
+export FLOWPILOT_HEALTH_CHECK_PORT_DEVELOPMENT=8081 # Health check endpoint port
+
+# Logging Configuration
+export FLOWPILOT_LOG_LEVEL_DEVELOPMENT=debug        # Log level (debug/info/warn/error)
+export FLOWPILOT_LOG_FORMAT_DEVELOPMENT=json        # Log format (json/text)
+
+# -----------------------------------------------------------------------------
+# MongoDB Configuration
+# -----------------------------------------------------------------------------
+# Connection Settings
+export FLOWPILOT_MONGODBURI=mongodb://localhost:27016  # MongoDB connection URI
+export FLOWPILOT_MONGODBUSERNAME=subratasuperadmin      # MongoDB username
+export FLOWPILOT_MONGODBPASSWORD=password123            # MongoDB password
+export FLOWPILOT_MONGODBDATABASE=test                   # Target database name
+
+# Connection Pool Settings
+export FLOWPILOT_MONGODBMAX_POOL_SIZE=10               # Maximum connections in pool
+export FLOWPILOT_MONGODBMIN_POOL_SIZE=1                # Minimum connections in pool
+export FLOWPILOT_MONGODBCONNECT_TIMEOUT=10s            # Connection timeout
+export FLOWPILOT_MONGODBOPERATION_TIMEOUT=5s           # Operation timeout
+
+# MongoDB Features
+export FLOWPILOT_MONGODBDIRECT=true                    # Direct connection mode
+export FLOWPILOT_MONGODBRETRY_READS=true              # Enable retry for read operations
+export FLOWPILOT_MONGODBRETRY_WRITES=true             # Enable retry for write operations
+
+# -----------------------------------------------------------------------------
+# Redis Configuration
+# -----------------------------------------------------------------------------
+# Basic Redis Settings
+export FLOWPILOT_REDISHOST=localhost                   # Redis server host
+export FLOWPILOT_REDISPORT=6379                        # Redis server port
+export FLOWPILOT_REDISPASSWORD=                        # Redis password (if any)
+export FLOWPILOT_REDISDATABASE=0                       # Redis database number
+
+# Connection Pool Configuration
+export FLOWPILOT_REDISPOOL_SIZE=10                     # Maximum number of connections
+export FLOWPILOT_REDISMIN_IDLE_CONNS=2                # Minimum idle connections
+export FLOWPILOT_REDISMAX_RETRIES=3                    # Maximum retry attempts
+
+# Timeouts and Intervals
+export FLOWPILOT_REDISDIAL_TIMEOUT=5s                  # Connection dial timeout
+export FLOWPILOT_REDISREAD_TIMEOUT=3s                  # Read operation timeout
+export FLOWPILOT_REDISWRITE_TIMEOUT=3s                 # Write operation timeout
+export FLOWPILOT_REDISPOOL_TIMEOUT=4s                  # Pool timeout
+export FLOWPILOT_REDISIDLE_TIMEOUT=300s                # Idle connection timeout
+export FLOWPILOT_REDISIDLE_CHECK_FREQUENCY=60s         # Idle check frequency
+
+# Redis Cluster Configuration
+export FLOWPILOT_REDIS_CLUSTERENABLED=false            # Enable cluster mode
+export FLOWPILOT_REDIS_CLUSTERADDRESSES=localhost:7000,localhost:7001,localhost:7002  # Cluster nodes
+export FLOWPILOT_REDIS_CLUSTERPASSWORD=                # Cluster password
+export FLOWPILOT_REDIS_CLUSTERROUTE_BY_LATENCY=true   # Route by latency
+export FLOWPILOT_REDIS_CLUSTERROUTE_RANDOMLY=true      # Random routing
+
+# -----------------------------------------------------------------------------
+# NATS Configuration
+# -----------------------------------------------------------------------------
+# Basic NATS Settings
+export FLOWPILOT_NATSURL=nats://localhost:4222         # NATS server URL
+export FLOWPILOT_NATSUSERNAME=                         # NATS username
+export FLOWPILOT_NATSPASSWORD=                         # NATS password
+export FLOWPILOT_NATSTOKEN=                            # NATS token
+
+# Connection Settings
+export FLOWPILOT_NATSCONNECT_TIMEOUT=10s               # Connection timeout
+export FLOWPILOT_NATSMAX_RECONNECTS=60                 # Maximum reconnection attempts
+export FLOWPILOT_NATSRECONNECT_WAIT=2s                 # Wait time between reconnects
+
+# NATS Streaming Configuration
+export FLOWPILOT_NATS_STREAMINGCLUSTER_ID=test-cluster # Streaming cluster ID
+export FLOWPILOT_NATS_STREAMINGCLIENT_ID=flowpilot-client-dev  # Client ID
+export FLOWPILOT_NATS_STREAMINGCONNECT_WAIT=2s         # Connection wait time
+export FLOWPILOT_NATS_STREAMINGDISCOVERY_PREFIX=_STAN.discovery  # Discovery prefix
+export FLOWPILOT_NATS_STREAMINGMAX_PINGS_OUT=2         # Maximum outstanding pings
+export FLOWPILOT_NATS_STREAMINGPING_INTERVAL=5s        # Ping interval
+export FLOWPILOT_NATS_STREAMINGMAX_PUB_ACKS_IN_FLIGHT=25  # Max pub acks in flight
+
+# JetStream Configuration
+export FLOWPILOT_NATS_JETSTREAMENABLED=true            # Enable JetStream
+export FLOWPILOT_NATS_JETSTREAMMAX_WAIT=5s            # Maximum wait time
+export FLOWPILOT_NATS_JETSTREAMMAX_MESSAGES=1000      # Maximum messages
+export FLOWPILOT_NATS_JETSTREAMMAX_BYTES=1048576      # Maximum bytes (1MB)
+export FLOWPILOT_NATS_JETSTREAMREPLICAS=1             # Number of replicas
+export FLOWPILOT_NATS_JETSTREAMMEMORY_STORAGE=false   # Use memory storage
+export FLOWPILOT_NATS_JETSTREAMRETENTION_POLICY=limits # Retention policy

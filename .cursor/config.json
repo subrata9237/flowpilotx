@@ -1,0 +1,57 @@
+{
+  "editor": {
+    "formatOnSave": true,
+    "formatOnType": true,
+    "tabSize": 4,
+    "insertSpaces": false,
+    "wordWrap": "off",
+    "rulers": [120],
+    "trimTrailingWhitespace": true,
+    "insertFinalNewline": true
+  },
+  "language": {
+    "go": {
+      "formatTool": "gofmt",
+      "diagnostics": {
+        "enabled": true,
+        "lint": true,
+        "vet": true
+      },
+      "completion": {
+        "enabled": true,
+        "snippets": true
+      },
+      "testing": {
+        "coverage": true,
+        "coverageDecorations": true
+      }
+    }
+  },
+  "git": {
+    "enabled": true,
+    "autoFetch": true,
+    "autoPull": false,
+    "decorations": true
+  },
+  "terminal": {
+    "integrated": true,
+    "shell": "/bin/bash",
+    "fontFamily": "monospace"
+  },
+  "search": {
+    "exclude": {
+      "**/node_modules": true,
+      "**/bower_components": true,
+      "**/*.code-search": true,
+      "**/vendor": true,
+      "**/.git": true
+    },
+    "followSymlinks": false
+  },
+  "telemetry": {
+    "enabled": false
+  },
+  "updates": {
+    "mode": "manual"
+  }
+}

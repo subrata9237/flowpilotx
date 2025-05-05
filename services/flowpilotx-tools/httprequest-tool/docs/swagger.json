@@ -1,0 +1,348 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "A service for handling HTTP requests",
+        "title": "HTTP Request Tool API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/health": {
+            "get": {
+                "description": "Get the health status of the service",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Check service health",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/process": {
+            "post": {
+                "description": "Process an HTTP request with the given parameters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json",
+                    "application/xml",
+                    "text/plain",
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "request"
+                ],
+                "summary": "Process HTTP request",
+                "parameters": [
+                    {
+                        "description": "HTTP request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.HTTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/model.HTTPResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/process/async": {
+            "post": {
+                "description": "Process an HTTP request asynchronously and return a request ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "request"
+                ],
+                "summary": "Process HTTP request asynchronously",
+                "parameters": [
+                    {
+                        "description": "HTTP request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.HTTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/process/batch": {
+            "post": {
+                "description": "Process multiple HTTP requests in batch",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json",
+                    "application/xml",
+                    "text/plain",
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "request"
+                ],
+                "summary": "Process multiple HTTP requests",
+                "parameters": [
+                    {
+                        "description": "Array of HTTP request parameters",
+                        "name": "requests",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.HTTPRequest"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/model.HTTPResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "model.FileUpload": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "content_type": {
+                    "type": "string"
+                },
+                "field_name": {
+                    "type": "string"
+                },
+                "file_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.HTTPRequest": {
+            "type": "object",
+            "required": [
+                "method",
+                "url"
+            ],
+            "properties": {
+                "body": {},
+                "files": {
+                    "description": "For file uploads",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.FileUpload"
+                    }
+                },
+                "form_data": {
+                    "description": "For form data",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "method": {
+                    "type": "string",
+                    "enum": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "DELETE",
+                        "PATCH",
+                        "HEAD",
+                        "OPTIONS"
+                    ]
+                },
+                "query_params": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "retry_count": {
+                    "type": "integer"
+                },
+                "retry_delay": {
+                    "description": "delay in seconds",
+                    "type": "integer"
+                },
+                "timeout": {
+                    "description": "timeout in seconds",
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "model.HTTPResponse": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "description": "Processed body (parsed JSON, XML, etc.)"
+                },
+                "content_type": {
+                    "description": "Response content type",
+                    "type": "string"
+                },
+                "error": {
+                    "description": "Error message if any",
+                    "type": "string"
+                },
+                "file_extension": {
+                    "description": "Detected file extension",
+                    "type": "string"
+                },
+                "format": {
+                    "description": "Detected format (json, xml, yaml, text, binary, etc.)",
+                    "type": "string"
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "is_base64": {
+                    "description": "Whether the body is base64 encoded",
+                    "type": "boolean"
+                },
+                "raw_body": {
+                    "description": "Original raw response",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "response_time": {
+                    "description": "in seconds",
+                    "type": "number"
+                },
+                "size": {
+                    "description": "Size of the response in bytes",
+                    "type": "integer"
+                },
+                "status_code": {
+                    "type": "integer"
+                },
+                "text_encoding": {
+                    "description": "Text encoding if detected",
+                    "type": "string"
+                }
+            }
+        }
+    }
+}
