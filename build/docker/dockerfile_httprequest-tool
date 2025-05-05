@@ -18,7 +18,7 @@ ADD .dotnetenv .
 RUN go install github.com/swaggo/swag/v2/cmd/swag@latest
 RUN ls -la /go/src/github.com/flowpilotx/services/flowpilotx-tools/httprequest-tool
 #copy the source code
-#ARG GIT_TOKEN=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
+#ARG GIT_TOKEN={}
 # Set up Git configuration directly
 #RUN git config --global url."https://${GIT_TOKEN}@github.com/".insteadOf "https://github.com/"
 RUN go mod tidy
