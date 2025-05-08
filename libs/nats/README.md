@@ -1,258 +1,304 @@
-# NATS Shared Library
+# NATS Library
 
-A production-ready NATS client library built on top of nats.go with support for both core NATS and JetStream functionality.
+A high-level NATS client library supporting pub/sub patterns, JetStream, and request-reply functionality with built-in resilience features.
 
 ## Features
 
-- Support for both standalone and cluster modes
-- Comprehensive messaging patterns:
-  - Publish/Subscribe
-  - Request/Reply
-  - Queue Groups
-  - JetStream support
-- Production-ready capabilities:
-  - Connection pooling
-  - Automatic reconnection
-  - Health monitoring
-  - Connection draining
-  - Message flushing
-  - Comprehensive metrics
-  - Connection status monitoring
-- Security features:
-  - TLS support with certificate validation
-  - Multiple authentication methods
-  - Token-based security
-- Operational features:
-  - Graceful shutdown
-  - Connection draining
-  - Message tracking
-  - Error monitoring
-- Context-aware operations
+- Pub/Sub messaging patterns
+- JetStream support for persistent messaging
+- Request-Reply pattern implementation
+- Automatic reconnection handling
+- Message delivery guarantees
+- Message filtering and wildcards
+- Queue groups support
+- Message headers and metadata
+- Connection pooling
+- Monitoring and metrics
 
 ## Installation
 
 ```bash
-go get github.com/flowpilotx/sharedlib/nats
+go get github.com/flowpilotx/libs/nats
 ```
 
 ## Configuration
 
 ```go
 type Config struct {
-    // Core settings
-    Mode            string        // "standalone" or "cluster"
-    Addresses       []string      // NATS server addresses
-
-    // Authentication
-    Username        string        // Authentication username
-    Password        string        // Authentication password
-    Token           string        // Authentication token
-
-    // TLS Security
-    EnableTLS      bool          // Enable TLS security
-    TLSCertFile    string        // Client certificate file
-    TLSKeyFile     string        // Client key file
-    TLSCACertFile  string        // CA certificate file
-
     // Connection settings
-    MaxReconnects   int           // Maximum reconnection attempts (-1 for unlimited)
-    ReconnectWait   time.Duration // Wait time between reconnection attempts
-    ConnectionName  string        // Name of the connection
-    ConnectTimeout  time.Duration // Connection timeout
-    PingInterval    time.Duration // Ping interval
-    MaxPingOutstand int           // Maximum outstanding pings
+    URLs              []string
+    Username          string
+    Password          string
+    Token             string
+    ConnectTimeout    time.Duration
+    MaxReconnects     int
+    ReconnectWait     time.Duration
+    
+    // TLS settings
+    TLS              *tls.Config
+    
+    // JetStream settings
+    EnableJetStream  bool
+    StreamConfig     StreamConfig
+    
+    // Queue settings
+    QueueGroup       string
+    
+    // Monitoring
+    EnableMetrics    bool
+}
 
-    // JetStream
-    EnableJetStream bool          // Enable JetStream
-    JetStreamConfig []nats.JSOpt  // JetStream options
-
-    // Health monitoring
-    HealthCheckInterval time.Duration // Health check interval
-    HealthCheckTimeout  time.Duration // Health check timeout
+type StreamConfig struct {
+    Name            string
+    Subjects        []string
+    Retention       RetentionPolicy
+    MaxAge          time.Duration
+    MaxBytes        int64
+    Replicas        int
 }
 ```
 
 ## Usage Examples
 
-### Initialize Client
+### Basic Pub/Sub
 
 ```go
-config := &nats.Config{
-    Mode:      "standalone",
-    Addresses: []string{"nats://localhost:4222"},
-    // Production settings
-    MaxReconnects:      60,
-    ReconnectWait:      2 * time.Second,
-    ConnectTimeout:     5 * time.Second,
-    HealthCheckInterval: 30 * time.Second,
-}
+package main
 
-client, err := nats.NewClient(config)
-if err != nil {
-    log.Fatal(err)
-}
-defer client.Close()
-```
+import (
+    "context"
+    "log"
+    "time"
+    
+    "github.com/flowpilotx/libs/nats"
+)
 
-### Basic Messaging
-
-```go
-// Subscribe
-sub, err := client.Subscribe("subject", func(msg *nats.Msg) {
-    fmt.Printf("Received: %s\n", string(msg.Data))
-})
-if err != nil {
-    log.Fatal(err)
-}
-defer sub.Unsubscribe()
-
-// Publish with guaranteed delivery
-err = client.Publish("subject", []byte("Hello NATS!"))
-if err != nil {
-    log.Fatal(err)
-}
-// Ensure message is sent
-err = client.Flush(time.Second)
-if err != nil {
-    log.Fatal(err)
-}
-```
-
-### Production Monitoring
-
-```go
-// Get connection statistics
-stats := client.GetStats()
-fmt.Printf("Messages - In: %d, Out: %d\n", stats.InMsgs, stats.OutMsgs)
-
-// Check connection status
-status := client.Status()
-if status != nats.CONNECTED {
-    log.Printf("Connection status: %v", status)
-}
-
-// Monitor message counts
-inCount := client.InMsgCount()
-outCount := client.OutMsgCount()
-fmt.Printf("Message counts - In: %d, Out: %d\n", inCount, outCount)
-
-// Check last error
-if err := client.LastError(); err != nil {
-    log.Printf("Last error: %v", err)
+func main() {
+    // Initialize client
+    client, err := nats.NewClient(nats.Config{
+        URLs: []string{"nats://localhost:4222"},
+        ConnectTimeout: time.Second * 10,
+        MaxReconnects: 5,
+    })
+    if err != nil {
+        log.Fatalf("Failed to create client: %v", err)
+    }
+    defer client.Close()
+    
+    // Subscribe to a subject
+    subscription, err := client.Subscribe("greetings", func(msg *nats.Message) {
+        log.Printf("Received: %s", string(msg.Data))
+    })
+    if err != nil {
+        log.Fatalf("Subscribe failed: %v", err)
+    }
+    defer subscription.Unsubscribe()
+    
+    // Publish a message
+    err = client.Publish("greetings", []byte("Hello, NATS!"))
+    if err != nil {
+        log.Fatalf("Publish failed: %v", err)
+    }
 }
 ```
 
-### Graceful Shutdown
+### JetStream Usage
 
 ```go
-// Drain connection (wait for in-flight messages)
-if err := client.DrainConnection(5 * time.Second); err != nil {
-    log.Printf("Error draining connection: %v", err)
-}
+package main
 
-// Close the client
-client.Close()
+import (
+    "context"
+    "log"
+    "time"
+    
+    "github.com/flowpilotx/libs/nats"
+)
+
+func main() {
+    client, err := nats.NewClient(nats.Config{
+        URLs: []string{"nats://localhost:4222"},
+        EnableJetStream: true,
+        StreamConfig: nats.StreamConfig{
+            Name:     "orders",
+            Subjects: []string{"orders.*"},
+            Retention: nats.WorkQueuePolicy,
+            MaxAge:   time.Hour * 24,
+            Replicas: 3,
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Close()
+    
+    // Create consumer
+    consumer, err := client.CreateConsumer("orders", &nats.ConsumerConfig{
+        DeliverPolicy: nats.DeliverAll,
+        AckPolicy:     nats.AckExplicit,
+        MaxDeliver:    3,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Subscribe with JetStream
+    subscription, err := consumer.Subscribe("orders.new", func(msg *nats.Message) {
+        log.Printf("Received order: %s", string(msg.Data))
+        msg.Ack()
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer subscription.Unsubscribe()
+    
+    // Publish with JetStream
+    ack, err := client.PublishAsync("orders.new", []byte("new order data"))
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    select {
+    case <-ack.Ok():
+        log.Println("Message stored in JetStream")
+    case err := <-ack.Err():
+        log.Printf("Store failed: %v", err)
+    }
+}
 ```
 
-### Health Checks
+### Request-Reply Pattern
 
 ```go
-// Manual health check
-if err := client.Ping(time.Second); err != nil {
-    log.Printf("Health check failed: %v", err)
+package main
+
+import (
+    "context"
+    "log"
+    "time"
+    
+    "github.com/flowpilotx/libs/nats"
+)
+
+func main() {
+    client, err := nats.NewClient(nats.Config{
+        URLs: []string{"nats://localhost:4222"},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Close()
+    
+    // Start reply handler
+    subscription, err := client.Subscribe("service.time", func(msg *nats.Message) {
+        response := time.Now().Format(time.RFC3339)
+        msg.Respond([]byte(response))
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer subscription.Unsubscribe()
+    
+    // Make request
+    ctx := context.Background()
+    response, err := client.Request(ctx, "service.time", nil, time.Second)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    log.Printf("Current time: %s", string(response.Data))
 }
 ```
 
-### Secure Connection
+### Queue Groups
 
 ```go
-config := &nats.Config{
-    EnableTLS:     true,
-    TLSCertFile:   "/path/to/cert.pem",
-    TLSKeyFile:    "/path/to/key.pem",
-    TLSCACertFile: "/path/to/ca.pem",
-    Username:      "secure_user",
-    Password:      "secure_password",
+package main
+
+import (
+    "log"
+    "time"
+    
+    "github.com/flowpilotx/libs/nats"
+)
+
+func main() {
+    client, err := nats.NewClient(nats.Config{
+        URLs: []string{"nats://localhost:4222"},
+        QueueGroup: "workers",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Close()
+    
+    // Subscribe to queue group
+    subscription, err := client.QueueSubscribe(
+        "tasks",
+        "workers",
+        func(msg *nats.Message) {
+            log.Printf("Processing task: %s", string(msg.Data))
+        },
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer subscription.Unsubscribe()
+    
+    // Publish tasks
+    for i := 0; i < 10; i++ {
+        task := fmt.Sprintf("task-%d", i)
+        err = client.Publish("tasks", []byte(task))
+        if err != nil {
+            log.Printf("Failed to publish task: %v", err)
+        }
+    }
 }
 ```
 
 ## Error Handling
 
-The library provides specific error types for different scenarios:
-
 ```go
-switch err {
-case nats.ErrClientClosed:
-    // Handle closed client
-case nats.ErrInvalidConfig:
-    // Handle invalid configuration
-case nats.ErrJetStreamNotEnabled:
-    // Handle JetStream not enabled
+switch err := err.(type) {
+case *nats.ConnectionError:
+    log.Printf("Connection error: %v", err)
+case *nats.SubscriptionError:
+    log.Printf("Subscription error: %v", err)
+case *nats.PublishError:
+    log.Printf("Publish error: %v", err)
+case *nats.TimeoutError:
+    log.Printf("Timeout error: %v", err)
 default:
-    // Handle other errors
+    log.Printf("Unknown error: %v", err)
 }
 ```
 
-## Best Practices
+## Development
 
-1. Always configure timeouts:
+### Running Tests
 
-```go
-config := &nats.Config{
-    ConnectTimeout: 5 * time.Second,
-    ReconnectWait:  2 * time.Second,
-}
+```bash
+go test ./...
 ```
 
-2. Use health checks:
+### Running Examples
 
-```go
-config := &nats.Config{
-    HealthCheckInterval: 30 * time.Second,
-    HealthCheckTimeout:  2 * time.Second,
-}
+```bash
+# Start NATS server
+docker run -d --name nats-server -p 4222:4222 nats
+
+# Run example
+go run example/main.go
 ```
-
-3. Configure reconnection:
-
-```go
-config := &nats.Config{
-    MaxReconnects: 60,  // Retry for up to 2 minutes with 2s wait
-    ReconnectWait: 2 * time.Second,
-}
-```
-
-4. Implement proper shutdown:
-
-```go
-// Graceful shutdown
-if err := client.DrainConnection(5 * time.Second); err != nil {
-    log.Printf("Drain error: %v", err)
-}
-defer client.Close()
-```
-
-5. Monitor connection health:
-
-```go
-go func() {
-    for {
-        stats := client.GetStats()
-        status := client.Status()
-        // Log or metric collection
-        time.Sleep(time.Minute)
-    }
-}()
-```
-
-## Thread Safety
-
-All operations in this library are thread-safe and can be safely used in concurrent goroutines.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create your feature branch
+3. Add tests for new functionality
+4. Update documentation
+5. Submit a pull request
 
 ## License
 
-This library is licensed under the MIT License - see the LICENSE file for details.
+This library is licensed under the MIT License.

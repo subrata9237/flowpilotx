@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package flowpilot.worker.v1;
+
+option go_package = "github.com/flowpilotx/libs/grpc-common/pkg/api/worker/v1;v1";
+
+// ExecuteRequest represents a request for executing an event
+message ExecuteRequest {
+  int32 event_id = 1;
+  bytes message = 2;
+}
+
+// ExecuteResponse represents the response from executing an event
+message ExecuteResponse {
+  int32 event_id = 1;
+  bytes message = 2;
+  ExecuteStatus status = 3;
+  string error_message = 4;
+}
+
+// ExecuteAsyncRequest represents a request for asynchronous execution
+message ExecuteAsyncRequest {
+  int32 event_id = 1;
+  bytes message = 2;
+  string callback_url = 3;  // Optional callback URL for result notification
+}
+
+// ExecuteAsyncResponse represents the initial response for async execution
+message ExecuteAsyncResponse {
+  int32 event_id = 2;
+  bytes message = 3;      // Echo back the original message
+  ExecuteStatus status = 4;
+}
+
+// ExecuteAsyncResult represents the final result of async execution
+message ExecuteAsyncResult {
+  int32 event_id = 2;
+  bytes message = 3;
+  ExecuteStatus status = 4;
+  string error_message = 5;
+}
+
+// ExecuteStatus represents the status of event execution
+enum ExecuteStatus {
+  EXECUTE_STATUS_UNSPECIFIED = 0;
+  EXECUTE_STATUS_SUCCESS = 1;
+  EXECUTE_STATUS_FAILED = 2;
+  EXECUTE_STATUS_IN_PROGRESS = 3;
+}
+
+// WorkerService provides worker functionality
+service WorkerService {
+  // Execute handles a single event execution request
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+
+  // ExecuteAsync handles asynchronous event execution
+  rpc ExecuteAsync(ExecuteAsyncRequest) returns (ExecuteAsyncResponse);
+
+  // GetAsyncResult retrieves the result of an async execution
+  rpc GetAsyncResult(ExecuteAsyncResponse) returns (ExecuteAsyncResult);
+
+  // StreamExecute handles streaming event execution requests
+  rpc StreamExecute(stream ExecuteRequest) returns (stream ExecuteResponse);
+} 

@@ -158,10 +158,10 @@ func (s *HTTPService) prepareRequestBody(req *model.HTTPRequest) (io.Reader, str
 		// Try JSON as default
 		if req.Body != nil {
 			jsonData, err := json.Marshal(req.Body)
-			if err != nil {
-				return nil, "", err
-			}
-			return bytes.NewBuffer(jsonData), "application/json", nil
+				if err != nil {
+					return nil, "", err
+				}
+				return bytes.NewBuffer(jsonData), "application/json", nil
 		}
 	}
 
@@ -222,7 +222,7 @@ func (s *HTTPService) processResponse(resp *http.Response, elapsed float64) (*mo
 		if err := xml.Unmarshal(rawBody, &xmlBody); err == nil {
 			response.Body = xmlBody
 		} else {
-			response.Body = string(rawBody)
+				response.Body = string(rawBody)
 		}
 
 	case strings.HasPrefix(mediaType, "text/"):
@@ -239,11 +239,11 @@ func (s *HTTPService) processResponse(resp *http.Response, elapsed float64) (*mo
 		response.Format = "binary"
 		response.Body = base64.StdEncoding.EncodeToString(rawBody)
 		response.IsBase64 = true
-		
-		// Try to detect file type
-		ext := detectedMIME.Extension()
-		if ext != "" {
-			response.FileExtension = strings.TrimPrefix(ext, ".")
+			
+			// Try to detect file type
+			ext := detectedMIME.Extension()
+			if ext != "" {
+				response.FileExtension = strings.TrimPrefix(ext, ".")
 		}
 	}
 

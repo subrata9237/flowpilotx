@@ -14,6 +14,9 @@ BUILD_DIR=build
 VERSION?=1.0.0
 BUILD_TIME=$(shell date +%FT%T%z)
 
+# Proto related variables
+GRPC_COMMON_DIR=libs/grpc-common
+
 # OS specific variables
 ifeq ($(OS),Windows_NT)
     DETECTED_OS := Windows
@@ -47,7 +50,7 @@ endif
 # Make is verbose in Linux. Make it silent.
 MAKEFLAGS += --silent
 
-.PHONY: all build clean test run docker-build docker-run setup-go-darwin setup-go-windows dev-setup setup-dev-env setup-node setup-python env-setup env-get env-list
+.PHONY: all build clean test run docker-build docker-run setup-go-darwin setup-go-windows dev-setup setup-dev-env setup-node setup-python env-setup env-get env-list worker-build worker-run worker-stop worker-clean worker-test worker-lint worker-proto proto proto-clean proto-deps
 
 all: clean build
 
@@ -136,7 +139,7 @@ else
 	@nvm use $(NODE_VERSION)
 	@nvm alias default $(NODE_VERSION)
 	@npm install -g yarn typescript ts-node
-endif
+endif 
 	@echo "  >  Node.js $(NODE_VERSION) setup completed!"
 
 setup-python:
@@ -212,23 +215,87 @@ env-list:
 	@echo "  >  Listing all environment variables from setup_env.sh:"
 	@cat setup_env.sh | grep "^export" | sed 's/^export //'
 
+check-ports:
+	@echo "  >  Checking if ports are available..."
+	@if lsof -i :$(GRPC_PORT) >/dev/null 2>&1; then \
+		echo "  >  Error: Port $(GRPC_PORT) is already in use"; \
+		exit 1; \
+	fi
+	@if lsof -i :$(HTTP_PORT) >/dev/null 2>&1; then \
+		echo "  >  Error: Port $(HTTP_PORT) is already in use"; \
+		exit 1; \
+	fi
+	@echo "  >  Ports are available"
+
 ## Help:
 help:
-	@echo "Usage:"
-	@echo "  make <target>"
-	@echo "  make setup-dev-env GO_VERSION=1.22.1 NODE_VERSION=18.19.1 PYTHON_VERSION=3.11.8    # Install specific versions"
-	@echo ""
-	@echo "Targets:"
-	@echo "  clean          Clean the build cache"
-	@echo "  setup-dev-env  Setup complete development environment with:"
-	@echo "                 - Go (default: $(GO_VERSION))"
-	@echo "                 - Node.js (default: $(NODE_VERSION))"
-	@echo "                 - Python (default: $(PYTHON_VERSION))"
-	@echo "  setup-golang   Setup Go only"
-	@echo "  setup-node     Setup Node.js only"
-	@echo "  setup-python   Setup Python only"
-	@echo "  env-setup      Load environment variables from .devenv"
-	@echo "  env-get        Get value of specific environment variable (Usage: make env-get VAR=VARIABLE_NAME)"
-	@echo "  docker-build   Build docker image"
-	@echo "  docker-run     Run docker container"
-	@echo "  help           Show this help"
+	@echo "  >  Available commands:"
+	@echo "  setup-dev-env Setup the development environment"
+	@echo "  setup-golang  Setup Go development environment"
+	@echo "  setup-node    Setup Node.js development environment"
+	@echo "  setup-python  Setup Python development environment"
+	@echo "  env-setup     Create setup_env.sh from .devenv"
+	@echo "  env-get       Get value of an environment variable"
+	@echo "  env-list      List all environment variables"
+
+# Add to the service directories section
+WORKER_DIR=services/flowpilotx-worker
+
+# Add to the binary names section
+WORKER_BIN=$(BUILD_DIR)/flowpilotx-worker
+
+# Add to the ports section
+WORKER_HTTP_PORT?=8082
+WORKER_GRPC_PORT?=9002
+
+# Add to the base paths section
+WORKER_PATH?=/worker/v1
+
+# Add to the build target
+build: gateway-build workflow-build ui-build worker-build
+
+# Add these new worker commands
+worker-build:
+	@echo "  >  Building worker service..."
+	@$(MAKE) -C $(WORKER_DIR) build
+
+worker-run:
+	@echo "  >  Starting worker service..."
+	@HTTP_PORT=$(WORKER_HTTP_PORT) \
+	GRPC_PORT=$(WORKER_GRPC_PORT) \
+	BASE_PATH=$(WORKER_PATH) \
+	$(MAKE) -C $(WORKER_DIR) run
+
+worker-stop:
+	@echo "  >  Stopping worker service..."
+	@$(MAKE) -C $(WORKER_DIR) stop
+
+worker-clean:
+	@echo "  >  Cleaning worker service..."
+	@$(MAKE) -C $(WORKER_DIR) clean
+
+worker-test:
+	@echo "  >  Running worker service tests..."
+	@$(MAKE) -C $(WORKER_DIR) test
+
+worker-lint:
+	@echo "  >  Running worker service linters..."
+	@$(MAKE) -C $(WORKER_DIR) lint
+
+worker-proto:
+	@echo "  >  Generating worker service protobuf code..."
+	@$(MAKE) -C $(WORKER_DIR) proto
+
+## Proto Commands
+proto-deps:
+	@echo "  >  Installing proto dependencies..."
+	@cd $(GRPC_COMMON_DIR) && $(MAKE) deps
+
+proto-clean:
+	@echo "  >  Cleaning proto generated files..."
+	@cd $(GRPC_COMMON_DIR) && $(MAKE) clean
+
+proto: proto-deps
+	@echo "  >  Generating proto files..."
+	@cd $(GRPC_COMMON_DIR) && $(MAKE) proto
+	@echo "  >  Proto generation complete"

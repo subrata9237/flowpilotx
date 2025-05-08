@@ -1,0 +1,83 @@
+# Root configuration for all services
+environment: "development"
+region: "us-west-1"
+project: "flowpilotx"
+
+# FlowPilot Worker Service Configuration
+flowpilotx_worker:
+  service:
+    name: "flowpilotx-worker"
+    version: "1.0.0"
+    environment: "development"
+  
+  server:
+    host: "0.0.0.0"
+    port: 50051
+    shutdown_timeout: "30s"
+    keepalive_time: "60s"
+    keepalive_timeout: "20s"
+    max_connection_idle: "180s"
+  
+  worker:
+    max_concurrent_tasks: 100
+    task_timeout: "30s"
+    retry:
+      max_attempts: 3
+      initial_interval: "1s"
+      max_interval: "5s"
+
+# Shared MongoDB configuration
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "flowpilotx"
+  options:
+    max_pool_size: 100
+    min_pool_size: 10
+    max_idle_time_ms: 30000
+    connect_timeout_ms: 5000
+    socket_timeout_ms: 10000
+    server_selection_timeout_ms: 5000
+    retry_writes: true
+    retry_reads: true
+  collections:
+    # Worker collections
+    worker_tasks: 
+      indexes:
+        - keys: ["status", "created_at", "updated_at"]
+          options: { background: true }
+    worker_executions:
+      indexes:
+        - keys: ["task_id", "status", "start_time"]
+          options: { background: true }
+    worker_events: {}
+    # Add other service collections here
+    workflow_tasks: {}
+    workflow_executions: {}
+    gateway_logs: {}
+
+# Shared metrics configuration
+metrics:
+  enabled: true
+  host: "0.0.0.0"
+  port: 9090
+
+# Shared logging configuration
+logging:
+  level: "info"
+  format: "json"
+  output_path: "stdout"
+
+# Default server settings
+server:
+  host: "0.0.0.0"
+  shutdown_timeout: "30s"
+  keepalive_time: "60s"
+  keepalive_timeout: "20s"
+  max_connection_idle: "180s"
+
+# Service ports mapping
+service_ports:
+  worker: 50051
+  gateway: 50052
+  workflow_manager: 50053
+  tools: 50054 

@@ -1,27 +1,78 @@
-# MongoDB Client Wrapper
+# MongoDB Library
 
-A production-ready MongoDB client wrapper for Go applications with support for connection management, CRUD operations, and advanced querying capabilities.
+A high-level MongoDB client library with connection pooling, automatic retries, and common operations abstraction.
 
 ## Features
 
 - Connection pooling and management
-- Comprehensive CRUD operations
+- Automatic retries with backoff
 - Transaction support
-- Aggregation pipeline support
-- Change stream support
-- Index management
 - Bulk operations
-- Error handling
-- Configurable timeouts and retries
-- Thread-safe operations
+- Query builder
+- Index management
+- Change streams
+- Aggregation pipeline builder
+- GridFS support
+- Monitoring and metrics
+- Type-safe operations
+- Context support
 
 ## Installation
 
 ```bash
-go get github.com/flowpilotx/sharedlib/mongodb
+go get github.com/flowpilotx/libs/mongodb
 ```
 
-## Quick Start
+## Configuration
+
+```go
+type Config struct {
+    // Connection settings
+    URI                string
+    Database          string
+    ConnectTimeout    time.Duration
+    OperationTimeout  time.Duration
+    
+    // Authentication
+    Username          string
+    Password          string
+    AuthSource        string
+    
+    // Pool settings
+    MaxPoolSize       uint64
+    MinPoolSize       uint64
+    MaxConnIdleTime   time.Duration
+    
+    // Retry settings
+    MaxRetries        int
+    RetryInterval     time.Duration
+    
+    // Write concern
+    WriteConcern      *WriteConcern
+    
+    // Read preference
+    ReadPreference    *ReadPreference
+    
+    // Monitoring
+    EnableMetrics     bool
+}
+
+type WriteConcern struct {
+    W                 interface{} // Number of nodes or "majority"
+    J                 bool        // Journal sync
+    WTimeout          time.Duration
+}
+
+type ReadPreference struct {
+    Mode             string // "primary", "secondary", etc.
+    MaxStaleness     time.Duration
+    TagSets         []map[string]string
+}
+```
+
+## Usage Examples
+
+### Basic Operations
 
 ```go
 package main
@@ -30,168 +81,264 @@ import (
     "context"
     "log"
     "time"
-
-    "github.com/flowpilotx/sharedlib/mongodb"
+    
+    "github.com/flowpilotx/libs/mongodb"
 )
 
 func main() {
-    // Create a new client with default configuration
-    client, err := mongodb.NewClient(nil)
+    // Initialize client
+    client, err := mongodb.NewClient(mongodb.Config{
+        URI:            "mongodb://localhost:27017",
+        Database:       "myapp",
+        ConnectTimeout: time.Second * 10,
+        MaxRetries:     3,
+    })
     if err != nil {
-        log.Fatal(err)
+        log.Fatalf("Failed to create client: %v", err)
     }
     defer client.Close()
-
-    // Or with custom configuration
-    config := &mongodb.Config{
-        URI:              "mongodb://localhost:27017",
-        Database:         "mydb",
-        ConnectTimeout:   10 * time.Second,
-        OperationTimeout: 5 * time.Second,
-        MaxPoolSize:      100,
-        MinPoolSize:      10,
-        RetryWrites:      true,
-        RetryReads:       true,
-    }
-
-    client, err = mongodb.NewClient(config)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer client.Close()
-
-    // Basic CRUD operations
+    
     ctx := context.Background()
-
-    // Insert a document
+    
+    // Insert document
     doc := map[string]interface{}{
-        "name": "test",
-        "value": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "created_at": time.Now(),
     }
-    result, err := client.InsertOne(ctx, "mycollection", doc)
+    
+    result, err := client.Collection("users").InsertOne(ctx, doc)
     if err != nil {
-        log.Fatal(err)
+        log.Fatalf("Insert failed: %v", err)
     }
-
-    // Find a document
-    var found map[string]interface{}
-    err = client.FindOne(ctx, "mycollection", map[string]interface{}{"name": "test"}, &found)
+    log.Printf("Inserted ID: %v", result.InsertedID)
+    
+    // Find document
+    var user map[string]interface{}
+    err = client.Collection("users").FindOne(ctx, map[string]interface{}{
+        "email": "john@example.com",
+    }).Decode(&user)
     if err != nil {
-        log.Fatal(err)
+        log.Fatalf("Find failed: %v", err)
     }
+    log.Printf("Found user: %v", user)
 }
 ```
-
-## Configuration Options
-
-| Option           | Description                 | Default                   |
-| ---------------- | --------------------------- | ------------------------- |
-| URI              | MongoDB connection string   | mongodb://localhost:27017 |
-| Database         | Default database name       | -                         |
-| Username         | Authentication username     | -                         |
-| Password         | Authentication password     | -                         |
-| ConnectTimeout   | Initial connection timeout  | 10s                       |
-| OperationTimeout | Operation timeout           | 5s                        |
-| MaxPoolSize      | Maximum connections in pool | 100                       |
-| MinPoolSize      | Minimum connections in pool | 10                        |
-| RetryWrites      | Enable retryable writes     | true                      |
-| RetryReads       | Enable retryable reads      | true                      |
-| Direct           | Enable direct connection    | false                     |
-
-## Advanced Usage
 
 ### Transactions
 
 ```go
-result, err := client.Transaction(ctx, func(sessCtx mongo.SessionContext) (interface{}, error) {
-    // Perform multiple operations atomically
-    _, err := client.InsertOne(sessCtx, "collection", doc1)
+package main
+
+import (
+    "context"
+    "log"
+    
+    "github.com/flowpilotx/libs/mongodb"
+)
+
+func main() {
+    client, err := mongodb.NewClient(mongodb.Config{
+        URI:      "mongodb://localhost:27017",
+        Database: "myapp",
+    })
     if err != nil {
-        return nil, err
+        log.Fatal(err)
     }
-
-    _, err = client.UpdateOne(sessCtx, "collection", filter, update)
-    return nil, err
-})
-```
-
-### Aggregation Pipeline
-
-```go
-pipeline := []bson.M{
-    {"$match": bson.M{"status": "active"}},
-    {"$group": bson.M{
-        "_id": "$category",
-        "count": bson.M{"$sum": 1},
-    }},
-}
-
-cursor, err := client.Aggregate(ctx, "collection", pipeline)
-```
-
-### Change Streams
-
-```go
-pipeline := []bson.M{}
-changeStream, err := client.Watch(ctx, "collection", pipeline)
-if err != nil {
-    log.Fatal(err)
-}
-defer changeStream.Close(ctx)
-
-for changeStream.Next(ctx) {
-    var changeEvent bson.M
-    if err := changeStream.Decode(&changeEvent); err != nil {
-        log.Printf("Error decoding change event: %v", err)
-        continue
+    defer client.Close()
+    
+    ctx := context.Background()
+    
+    // Start transaction
+    err = client.WithTransaction(ctx, func(sessCtx context.Context) error {
+        // Insert order
+        order := map[string]interface{}{
+            "user_id": "123",
+            "amount":  100.50,
+            "status": "pending",
+        }
+        _, err := client.Collection("orders").InsertOne(sessCtx, order)
+        if err != nil {
+            return err
+        }
+        
+        // Update user balance
+        _, err = client.Collection("users").UpdateOne(
+            sessCtx,
+            map[string]interface{}{"_id": "123"},
+            map[string]interface{}{
+                "$inc": map[string]interface{}{
+                    "balance": -100.50,
+                },
+            },
+        )
+        return err
+    })
+    
+    if err != nil {
+        log.Printf("Transaction failed: %v", err)
     }
-    // Handle change event
 }
 ```
 
 ### Bulk Operations
 
 ```go
-models := []mongo.WriteModel{
-    mongo.NewInsertOneModel().SetDocument(doc1),
-    mongo.NewUpdateOneModel().
-        SetFilter(filter).
-        SetUpdate(update),
-    mongo.NewDeleteOneModel().
-        SetFilter(deleteFilter),
-}
+package main
 
-result, err := client.BulkWrite(ctx, "collection", models)
+import (
+    "context"
+    "log"
+    
+    "github.com/flowpilotx/libs/mongodb"
+)
+
+func main() {
+    client, err := mongodb.NewClient(mongodb.Config{
+        URI:      "mongodb://localhost:27017",
+        Database: "myapp",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Close()
+    
+    ctx := context.Background()
+    
+    // Create bulk operation
+    bulk := client.Collection("users").Bulk()
+    
+    // Add operations
+    bulk.InsertOne(map[string]interface{}{
+        "name": "User 1",
+        "role": "admin",
+    })
+    
+    bulk.InsertOne(map[string]interface{}{
+        "name": "User 2",
+        "role": "user",
+    })
+    
+    bulk.UpdateOne(
+        map[string]interface{}{"name": "User 3"},
+        map[string]interface{}{
+            "$set": map[string]interface{}{
+                "role": "manager",
+            },
+        },
+        mongodb.UpsertOption(),
+    )
+    
+    // Execute bulk operation
+    result, err := bulk.Execute(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    log.Printf("Inserted: %d, Modified: %d, Deleted: %d",
+        result.InsertedCount,
+        result.ModifiedCount,
+        result.DeletedCount,
+    )
+}
+```
+
+### Change Streams
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    
+    "github.com/flowpilotx/libs/mongodb"
+)
+
+func main() {
+    client, err := mongodb.NewClient(mongodb.Config{
+        URI:      "mongodb://localhost:27017",
+        Database: "myapp",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Close()
+    
+    ctx := context.Background()
+    
+    // Watch collection changes
+    stream, err := client.Collection("users").Watch(ctx, mongodb.Pipeline{
+        {{"$match": map[string]interface{}{
+            "operationType": "insert",
+        }}},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer stream.Close()
+    
+    // Process changes
+    for stream.Next(ctx) {
+        var change map[string]interface{}
+        if err := stream.Decode(&change); err != nil {
+            log.Printf("Decode error: %v", err)
+            continue
+        }
+        log.Printf("Change detected: %v", change)
+    }
+    
+    if err := stream.Err(); err != nil {
+        log.Printf("Stream error: %v", err)
+    }
+}
 ```
 
 ## Error Handling
 
-The library provides several predefined errors:
+```go
+switch err := err.(type) {
+case *mongodb.ConnectionError:
+    log.Printf("Connection error: %v", err)
+case *mongodb.WriteError:
+    log.Printf("Write error: %v", err)
+case *mongodb.ReadError:
+    log.Printf("Read error: %v", err)
+case *mongodb.TimeoutError:
+    log.Printf("Timeout error: %v", err)
+case *mongodb.ValidationError:
+    log.Printf("Validation error: %v", err)
+default:
+    log.Printf("Unknown error: %v", err)
+}
+```
 
-- `ErrClientClosed`: Returned when attempting to use a closed client
-- `ErrInvalidConfig`: Returned when the configuration is invalid
-- `ErrNoDocuments`: Returned when no documents are found (from mongo.ErrNoDocuments)
+## Development
 
-## Testing
-
-To run the tests:
+### Running Tests
 
 ```bash
-# Set MongoDB test URI if needed
-export MONGODB_TEST_URI="mongodb://localhost:27017"
+go test ./...
+```
 
-# Run tests
-go test -v ./...
+### Running Examples
+
+```bash
+# Start MongoDB
+docker run -d --name mongodb -p 27017:27017 mongo
+
+# Run example
+go run example/main.go
 ```
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create your feature branch
+3. Add tests for new functionality
+4. Update documentation
+5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This library is licensed under the MIT License.
