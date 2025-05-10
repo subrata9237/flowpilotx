@@ -14,6 +14,13 @@ BUILD_DIR=build
 VERSION?=1.0.0
 BUILD_TIME=$(shell date +%FT%T%z)
 
+# Gateway service configuration
+GATEWAY_HTTP_PORT?=8080
+GATEWAY_BASE_PATH?=/api/flowpilotx-gateway
+GATEWAY_WS_PATH?=/ws/flowpilotx-gateway
+GATEWAY_CLIENT_MODE?=ping
+GATEWAY_CLIENT_MSG_COUNT?=10
+
 # Proto related variables
 GRPC_COMMON_DIR=libs/grpc-common
 
@@ -50,7 +57,7 @@ endif
 # Make is verbose in Linux. Make it silent.
 MAKEFLAGS += --silent
 
-.PHONY: all build clean test run docker-build docker-run setup-go-darwin setup-go-windows dev-setup setup-dev-env setup-node setup-python env-setup env-get env-list worker-build worker-run worker-stop worker-clean worker-test worker-lint worker-proto proto proto-clean proto-deps
+.PHONY: all build clean test run docker-build docker-run setup-go-darwin setup-go-windows dev-setup setup-dev-env setup-node setup-python env-setup env-get env-list worker-build worker-run worker-stop worker-clean worker-test worker-lint worker-proto proto proto-clean proto-deps gateway-client gateway-client-ping gateway-client-echo gateway-client-load
 
 all: clean build
 
@@ -229,30 +236,112 @@ check-ports:
 
 ## Help:
 help:
-	@echo "  >  Available commands:"
-	@echo "  setup-dev-env Setup the development environment"
-	@echo "  setup-golang  Setup Go development environment"
-	@echo "  setup-node    Setup Node.js development environment"
-	@echo "  setup-python  Setup Python development environment"
-	@echo "  env-setup     Create setup_env.sh from .devenv"
-	@echo "  env-get       Get value of an environment variable"
-	@echo "  env-list      List all environment variables"
+	@echo "FlowPilotX Commands:"
+	@echo ""
+	@echo "Service Commands:"
+	@echo "  Gateway Service:"
+	@echo "    make gateway-build    - Build gateway service"
+	@echo "    make gateway-run      - Run gateway service"
+	@echo "    make gateway-stop     - Stop gateway service"
+	@echo "    make gateway-clean    - Clean gateway service"
+	@echo "    make gateway-test     - Run gateway tests"
+	@echo "    make gateway-lint     - Run gateway linters"
+	@echo ""
+	@echo "  Worker Service:"
+	@echo "    make worker-build     - Build worker service"
+	@echo "    make worker-run       - Run worker service"
+	@echo "    make worker-stop      - Stop worker service"
+	@echo "    make worker-clean     - Clean worker service"
+	@echo "    make worker-test      - Run worker tests"
+	@echo "    make worker-lint      - Run worker linters"
+	@echo ""
+	@echo "Combined Commands:"
+	@echo "    make build            - Build all services"
+	@echo "    make run-services     - Run all services"
+	@echo "    make stop-services    - Stop all services"
+	@echo "    make clean-services   - Clean all services"
+	@echo "    make test-services    - Test all services"
+	@echo ""
+	@echo "Environment Variables:"
+	@echo "  Gateway Service:"
+	@echo "    GATEWAY_HTTP_PORT    - HTTP port (default: $(GATEWAY_HTTP_PORT))"
+	@echo "    GATEWAY_PATH         - API base path (default: $(GATEWAY_PATH))"
+	@echo ""
+	@echo "  Worker Service:"
+	@echo "    WORKER_HTTP_PORT     - HTTP port (default: $(WORKER_HTTP_PORT))"
+	@echo "    WORKER_GRPC_PORT     - gRPC port (default: $(WORKER_GRPC_PORT))"
+	@echo "    WORKER_PATH          - API base path (default: $(WORKER_PATH))"
+	@echo "  Gateway Client Commands:"
+	@echo "    make gateway-client       - Run gateway test client with custom settings"
+	@echo "    make gateway-client-ping  - Run gateway client in ping mode"
+	@echo "    make gateway-client-echo  - Run gateway client in echo mode"
+	@echo "    make gateway-client-load  - Run gateway client in load test mode"
+	@echo ""
+	@echo "  Environment Variables:"
+	@echo "    GATEWAY_BASE_PATH        - Gateway API base path (default: $(GATEWAY_BASE_PATH))"
+	@echo "    GATEWAY_WS_PATH          - Gateway WebSocket path (default: $(GATEWAY_WS_PATH))"
+	@echo "    GATEWAY_CLIENT_MODE      - Gateway test client mode (default: $(GATEWAY_CLIENT_MODE))"
+	@echo "    GATEWAY_CLIENT_MSG_COUNT - Number of messages for load test (default: $(GATEWAY_CLIENT_MSG_COUNT))"
 
 # Add to the service directories section
+GATEWAY_DIR=services/flowpilotx-gateway
 WORKER_DIR=services/flowpilotx-worker
 
 # Add to the binary names section
+GATEWAY_BIN=$(BUILD_DIR)/flowpilotx-gateway
 WORKER_BIN=$(BUILD_DIR)/flowpilotx-worker
 
 # Add to the ports section
+GATEWAY_HTTP_PORT?=8080
 WORKER_HTTP_PORT?=8082
 WORKER_GRPC_PORT?=9002
 
 # Add to the base paths section
+GATEWAY_PATH?=/gateway/v1
 WORKER_PATH?=/worker/v1
 
 # Add to the build target
-build: gateway-build workflow-build ui-build worker-build
+build: gateway-build worker-build
+
+# Add these new gateway commands
+gateway-build:
+	@echo "  >  Building gateway service..."
+	@$(MAKE) -C $(GATEWAY_DIR) build
+
+gateway-run:
+	@echo "  >  Starting gateway service..."
+	@HTTP_PORT=$(GATEWAY_HTTP_PORT) \
+	BASE_PATH=$(GATEWAY_PATH) \
+	$(MAKE) -C $(GATEWAY_DIR) run
+
+gateway-stop:
+	@echo "  >  Stopping gateway service..."
+	@$(MAKE) -C $(GATEWAY_DIR) stop
+
+gateway-clean:
+	@echo "  >  Cleaning gateway service..."
+	@$(MAKE) -C $(GATEWAY_DIR) clean
+
+gateway-test:
+	@echo "  >  Running gateway service tests..."
+	@$(MAKE) -C $(GATEWAY_DIR) test
+
+gateway-lint:
+	@echo "  >  Running gateway service linters..."
+	@$(MAKE) -C $(GATEWAY_DIR) lint
+
+# Combined service commands
+run-services: gateway-run worker-run
+	@echo "  >  All services started"
+
+stop-services: gateway-stop worker-stop
+	@echo "  >  All services stopped"
+
+clean-services: gateway-clean worker-clean
+	@echo "  >  All services cleaned"
+
+test-services: gateway-test worker-test
+	@echo "  >  All service tests completed"
 
 # Add these new worker commands
 worker-build:
@@ -299,3 +388,28 @@ proto: proto-deps
 	@echo "  >  Generating proto files..."
 	@cd $(GRPC_COMMON_DIR) && $(MAKE) proto
 	@echo "  >  Proto generation complete"
+
+## Gateway Client Commands
+gateway-client-build:
+	@echo "  >  Building gateway test client..."
+	@cd services/flowpilotx-gateway && \
+	CGO_ENABLED=0 go build -v -o ../../$(BUILD_DIR)/gateway-test-client ./cmd/client/main.go
+	@echo "  >  Gateway client build complete"
+
+gateway-client: gateway-client-build
+	@echo "  >  Running gateway test client..."
+	@$(BUILD_DIR)/gateway-test-client \
+		-addr localhost:$(GATEWAY_HTTP_PORT) \
+		-base $(GATEWAY_BASE_PATH) \
+		-ws $(GATEWAY_WS_PATH) \
+		-mode $(GATEWAY_CLIENT_MODE) \
+		-n $(GATEWAY_CLIENT_MSG_COUNT)
+
+gateway-client-ping: GATEWAY_CLIENT_MODE=ping
+gateway-client-ping: gateway-client
+
+gateway-client-echo: GATEWAY_CLIENT_MODE=echo
+gateway-client-echo: gateway-client
+
+gateway-client-load: GATEWAY_CLIENT_MODE=load
+gateway-client-load: gateway-client
