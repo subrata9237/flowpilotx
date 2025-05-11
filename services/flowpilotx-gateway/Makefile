@@ -22,10 +22,10 @@ GO_TEST_FLAGS?=-v -race -count=1
 # Make is verbose in Linux. Make it silent.
 MAKEFLAGS += --silent
 
-.PHONY: all build clean test run stop help dev lint run-client build-client
+.PHONY: all build clean test run stop help dev lint run-client build-client swagger-init swagger-gen
 
 ## Build Commands
-all: clean build
+all: clean swagger-gen build
 
 build:
 	@echo "  >  Building gateway service..."
@@ -114,6 +114,15 @@ run-client-echo: run-client
 run-client-load: CLIENT_MODE=load
 run-client-load: run-client
 
+## Swagger targets
+swagger-init:
+	@echo "  >  Installing swag..."
+	@go install github.com/swaggo/swag/cmd/swag@latest
+
+swagger-gen:
+	@echo "  >  Generating Swagger documentation..."
+	@swag init -g ./cmd/server/main.go -o docs
+
 ## Help Command
 help:
 	@echo "Gateway Service Commands:"
@@ -144,6 +153,10 @@ help:
 	@echo "  Docker Commands:"
 	@echo "    make docker-build   - Build Docker image"
 	@echo "    make docker-run     - Run Docker container"
+	@echo ""
+	@echo "  Swagger Commands:"
+	@echo "    make swagger-init   - Install swag"
+	@echo "    make swagger-gen    - Generate Swagger documentation"
 	@echo ""
 	@echo "  Environment Variables:"
 	@echo "    HTTP_PORT          - HTTP port (default: $(HTTP_PORT))"

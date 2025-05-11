@@ -4,21 +4,7 @@ import (
 	"bufio"
 	"net"
 	"net/http"
-	"time"
 )
-
-// HealthResponse represents the health check response
-type HealthResponse struct {
-	Status    string    `json:"status"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-// VersionResponse represents the version information response
-type VersionResponse struct {
-	Version     string `json:"version"`
-	Environment string `json:"environment"`
-	ServiceName string `json:"service_name"`
-}
 
 // ResponseWriter is a custom response writer that captures the status code
 type ResponseWriter struct {
@@ -46,4 +32,4 @@ func (rw *ResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		return hijacker.Hijack()
 	}
 	return nil, nil, http.ErrNotSupported
-} 
+}

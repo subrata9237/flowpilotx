@@ -2,17 +2,18 @@ package logger
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	libctx "github.com/flowpilotx/libs/context"
 )
+
+// Add this at the top of the file with other imports
 
 // Constants
 const (
@@ -66,7 +67,6 @@ type LoggerInterface interface {
 	GetApplicationName() string
 }
 
-
 // ServiceLogConfig holds service-specific logging configuration
 type ServiceLogConfig struct {
 	Level       string
@@ -80,39 +80,71 @@ type Logger struct {
 	*zap.Logger
 	environment     string
 	applicationName string
-	formatter      LogFormatter
-	level          LogLevel
-	mu             sync.RWMutex
+	level           LogLevel
+	mu              sync.RWMutex
 }
-
-// LogFormatter defines how log messages are formatted
-type LogFormatter interface {
-	Format(level string, msg string, fields map[string]interface{}) string
-}
-
-// JSONFormatter formats logs as JSON
-type JSONFormatter struct{}
-
-// TextFormatter formats logs as human-readable text
-type TextFormatter struct{}
-
-// Constructor Functions
 
 // NewLogger creates a new logger instance with the given configuration
 func NewLogger(config ServiceLogConfig) LoggerInterface {
-	var formatter LogFormatter
-	if config.Format == "json" {
-		formatter = &JSONFormatter{}
-	} else {
-		formatter = &TextFormatter{}
+	// Create encoder config
+	encoderConfig := zapcore.EncoderConfig{
+		TimeKey:        "timestamp",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		FunctionKey:    zapcore.OmitKey,
+		MessageKey:     "message",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+		EncodeTime:     zapcore.ISO8601TimeEncoder,
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
 
+	// Create core with appropriate encoder
+	var core zapcore.Core
+	if config.Format == "json" {
+		core = zapcore.NewCore(
+			zapcore.NewJSONEncoder(encoderConfig),
+			zapcore.AddSync(os.Stdout),
+			getZapLevel(config.Level),
+		)
+	} else {
+		// Text format with custom console encoder
+		core = zapcore.NewCore(
+			zapcore.NewConsoleEncoder(encoderConfig),
+			zapcore.AddSync(os.Stdout),
+			getZapLevel(config.Level),
+		)
+	}
+
+	// Create logger with the core
+	logger := zap.New(core, zap.AddCaller())
+
 	return &Logger{
-		Logger:          zap.NewExample(),
-		level:          StringToLogLevel(config.Level),
-		environment:    config.Environment,
+		Logger:          logger,
+		level:           StringToLogLevel(config.Level),
+		environment:     config.Environment,
 		applicationName: config.ServiceName,
-		formatter:      formatter,
+	}
+}
+
+// getZapLevel converts our LogLevel to zapcore.Level
+func getZapLevel(level string) zapcore.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn", "warning":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	case "fatal":
+		return zapcore.FatalLevel
+	default:
+		return zapcore.InfoLevel
 	}
 }
 
@@ -165,7 +197,7 @@ func (l *Logger) Fatal(ctx context.Context, msg string, fields map[string]interf
 // getContextFields extracts standard fields from context
 func getContextFields(ctx context.Context) map[string]interface{} {
 	fields := make(map[string]interface{})
-	
+
 	if ctx == nil {
 		return fields
 	}
@@ -190,13 +222,13 @@ func (l *Logger) log(ctx context.Context, level string, msg string, fields map[s
 
 	// Combine logger fields with message fields
 	allFields := make(map[string]interface{})
-	
+
 	// Add context fields first (highest priority)
 	contextFields := getContextFields(ctx)
 	for k, v := range contextFields {
 		allFields[k] = v
 	}
-	
+
 	// Add user-provided fields
 	for k, v := range fields {
 		// Don't override context fields
@@ -208,76 +240,56 @@ func (l *Logger) log(ctx context.Context, level string, msg string, fields map[s
 	// Add standard fields
 	allFields["environment"] = l.environment
 	allFields["app_name"] = l.applicationName
-	allFields["level"] = level
-	allFields["timestamp"] = time.Now().Format(time.RFC3339)
-	allFields["message"] = msg
 
-	// Format and write log entry
-	logLine := l.formatter.Format(level, msg, allFields)
-	fmt.Fprintln(os.Stdout, logLine)
+	// Convert fields to zap fields
+	zapFields := make([]zap.Field, 0, len(allFields))
+	for k, v := range allFields {
+		zapFields = append(zapFields, zap.Any(k, v))
+	}
+	//Add color to the message based on level
+	color := getColorForLevel(level)
+	coloredMsg := fmt.Sprintf("%s%s%s", color, msg, colorReset)
+	// Log using appropriate Zap level
+	switch level {
+	case "DEBUG":
+		l.Logger.Debug(coloredMsg, zapFields...)
+	case "INFO":
+		l.Logger.Info(coloredMsg, zapFields...)
+	case "WARN":
+		l.Logger.Warn(coloredMsg, zapFields...)
+	case "ERROR":
+		l.Logger.Error(coloredMsg, zapFields...)
+	case "FATAL":
+		l.Logger.Fatal(coloredMsg, zapFields...)
+	default:
+		l.Logger.Info(coloredMsg, zapFields...)
+	}
 }
 
-// Format formats a log message as JSON
-func (f *JSONFormatter) Format(level string, msg string, fields map[string]interface{}) string {
-	// Ensure request_id and execution_time are prominently placed in JSON
-	logEntry := map[string]interface{}{
-		"timestamp": fields["timestamp"],
-		"level":     level,
-		"message":   msg,
-	}
-	
-	// Add request_id and execution_time first if they exist
-	if requestID, ok := fields["request_id"]; ok {
-		logEntry["request_id"] = requestID
-	}
-	if execTime, ok := fields["execution_time"]; ok {
-		logEntry["execution_time"] = execTime
-	}
-	
-	// Add remaining fields
-	for k, v := range fields {
-		if k != "timestamp" && k != "level" && k != "message" && 
-		   k != "request_id" && k != "execution_time" {
-			logEntry[k] = v
-		}
-	}
+// Add these color constants at the top with other constants
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorBlue   = "\033[34m"
+	colorPurple = "\033[35m"
+)
 
-	jsonBytes, err := json.Marshal(logEntry)
-	if err != nil {
-		return fmt.Sprintf("[ERROR] Failed to marshal log entry: %v", err)
+// Add this function to color messages based on level
+func getColorForLevel(level string) string {
+	switch level {
+	case "DEBUG":
+		return colorBlue
+	case "INFO":
+		return colorGreen
+	case "WARN":
+		return colorYellow
+	case "ERROR":
+		return colorRed
+	case "FATAL":
+		return colorPurple
+	default:
+		return colorReset
 	}
-	return string(jsonBytes)
 }
-
-// Format formats a log message as text
-func (f *TextFormatter) Format(level string, msg string, fields map[string]interface{}) string {
-	var parts []string
-	
-	// Start with timestamp and level
-	timestamp := fields["timestamp"].(string)
-	parts = append(parts, fmt.Sprintf("[%s]", timestamp))
-	parts = append(parts, fmt.Sprintf("[%s]", level))
-	
-	// Add request_id and execution_time if they exist
-	if requestID, ok := fields["request_id"]; ok {
-		parts = append(parts, fmt.Sprintf("request_id=%v", requestID))
-	}
-	if execTime, ok := fields["execution_time"]; ok {
-		parts = append(parts, fmt.Sprintf("execution_time=%v", execTime))
-	}
-	
-	// Add message
-	parts = append(parts, fmt.Sprintf("msg=%q", msg))
-	
-	// Add remaining fields
-	for k, v := range fields {
-		if k != "timestamp" && k != "level" && k != "message" && 
-		   k != "request_id" && k != "execution_time" {
-			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
-		}
-	}
-	
-	return strings.Join(parts, " ")
-}
-
-

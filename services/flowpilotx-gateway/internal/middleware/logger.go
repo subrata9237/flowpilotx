@@ -30,24 +30,34 @@ func LoggingMiddleware(log logger.LoggerInterface) func(http.Handler) http.Handl
 				return
 			}
 
+			// Log request start
+			log.Info(r.Context(), "Request started", map[string]interface{}{
+				"method":      r.Method,
+				"path":        r.URL.Path,
+				"remote_addr": r.RemoteAddr,
+				"user_agent":  r.UserAgent(),
+				"query":       r.URL.RawQuery,
+			})
+
 			// Create a custom response writer to capture the status code
 			rw := &models.ResponseWriter{
 				ResponseWriter: w,
-				Status:        http.StatusOK,
+				Status:         http.StatusOK,
 			}
 
 			// Process request
 			next.ServeHTTP(rw, r)
 
-			// Log request details
+			// Log request completion
 			duration := time.Since(start)
-			log.Info(r.Context(), "HTTP Request", map[string]interface{}{
+			log.Info(r.Context(), "Request completed", map[string]interface{}{
 				"method":      r.Method,
 				"path":        r.URL.Path,
 				"remote_addr": r.RemoteAddr,
 				"status":      rw.Status,
 				"duration":    duration,
 				"user_agent":  r.UserAgent(),
+				"query":       r.URL.RawQuery,
 			})
 		})
 	}
@@ -57,4 +67,4 @@ func LoggingMiddleware(log logger.LoggerInterface) func(http.Handler) http.Handl
 func isWebSocketUpgrade(r *http.Request) bool {
 	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
 		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
-} 
+}

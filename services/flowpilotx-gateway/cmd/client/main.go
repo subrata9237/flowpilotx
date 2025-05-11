@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -14,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/flowpilotx/services/flowpilotx-gateway/internal/models"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -36,7 +39,7 @@ type VersionResponse struct {
 
 func main() {
 	flag.Parse()
-
+	*testMode = "echo"
 	// Ensure base path starts with / and doesn't end with /
 	*basePath = "/" + strings.Trim(*basePath, "/")
 
@@ -67,8 +70,8 @@ func main() {
 
 	// Set up WebSocket dialer with custom headers
 	dialer := websocket.Dialer{
-		Proxy:            http.ProxyFromEnvironment,
-		HandshakeTimeout: 45 * time.Second,
+		Proxy:             http.ProxyFromEnvironment,
+		HandshakeTimeout:  45 * time.Second,
 		EnableCompression: true,
 	}
 
@@ -93,6 +96,10 @@ func main() {
 	// Log successful connection
 	log.Printf("Connected to WebSocket at %s", url)
 
+	// Create context for the entire client session
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Create done channel for graceful shutdown
 	done := make(chan struct{})
 
@@ -104,48 +111,154 @@ func main() {
 	go func() {
 		defer close(done)
 		for {
-			_, message, err := c.ReadMessage()
-			if err != nil {
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("read error: %v", err)
-				}
+			select {
+			case <-ctx.Done():
 				return
+			default:
+				_, message, err := c.ReadMessage()
+				if err != nil {
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+						log.Printf("read error: %v", err)
+					}
+					return
+				}
+				// Parse the response
+				var response models.WebSocketResponse
+				if err := json.Unmarshal(message, &response); err != nil {
+					log.Printf("Failed to parse response: %v", err)
+					continue
+				}
+				log.Printf("recv: EventID=%s, Success=%v, Data=%v, Error=%s, StatusCode=%d",
+					response.EventID, response.Success, response.Message, response.Error, response.StatusCode)
 			}
-			log.Printf("recv: %s", message)
 		}
 	}()
 
-	// Handle different test modes
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	// Start test mode goroutine based on the selected mode
 	switch *testMode {
-	case "ping":
-		go pingTest(ctx, c)
+	case "gg":
+		go runPingTest(ctx, c, interrupt)
 	case "echo":
-		go echoTest(ctx, c)
+		go runEchoTest(ctx, c, interrupt)
 	case "load":
-		go loadTest(ctx, c, *msgCount)
+		go runLoadTest(ctx, c, interrupt, *msgCount)
 	default:
-		log.Fatalf("unknown test mode: %s", *testMode)
+		log.Printf("Unknown test mode: %s", *testMode)
+		return
 	}
 
 	// Wait for interrupt signal
 	select {
 	case <-interrupt:
-		log.Println("interrupt received, closing connection...")
-		err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
-			log.Println("write close:", err)
-		}
-		select {
-		case <-done:
-			log.Println("connection closed cleanly")
-		case <-time.After(time.Second):
-			log.Println("timeout waiting for connection to close")
-		}
-		return
+		log.Println("Received interrupt signal")
+	case <-done:
+		log.Println("Connection closed")
 	}
+
+	// Cleanup
+	log.Println("Closing connection...")
+	err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	if err != nil {
+		log.Printf("write close error: %v", err)
+	}
+	<-done
+	log.Println("Connection closed")
+}
+
+func runPingTest(ctx context.Context, c *websocket.Conn, interrupt chan os.Signal) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-interrupt:
+			return
+		case <-ticker.C:
+			err := c.WriteMessage(websocket.TextMessage, []byte("ping"))
+			if err != nil {
+				log.Printf("write error: %v", err)
+				return
+			}
+			log.Printf("sent: EventID=%s, Message=ping", uuid.New().String())
+		}
+	}
+}
+
+func runEchoTest(ctx context.Context, c *websocket.Conn, interrupt chan os.Signal) {
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-interrupt:
+			return
+		default:
+			fmt.Print("Enter message (or 'quit' to exit): ")
+			if scanner.Scan() {
+				message := scanner.Text()
+				if message == "quit" {
+					return
+				}
+
+				// Create WebSocket message
+				wsMessage := models.WebSocketMessage{
+					EventID: uuid.New().String(),
+					Message: message,
+				}
+
+				// Convert to binary
+				messageBytes, err := json.Marshal(wsMessage)
+				if err != nil {
+					log.Printf("Failed to marshal message: %v", err)
+					continue
+				}
+
+				err = c.WriteMessage(websocket.BinaryMessage, messageBytes)
+				if err != nil {
+					log.Printf("write error: %v", err)
+					return
+				}
+				log.Printf("sent: EventID=%s, Payload=%s", wsMessage.EventID, wsMessage.Message)
+			}
+		}
+	}
+}
+
+func runLoadTest(ctx context.Context, c *websocket.Conn, interrupt chan os.Signal, count int) {
+	for i := 0; i < count; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-interrupt:
+			return
+		default:
+			// Create test message
+			wsMessage := models.WebSocketMessage{
+				EventID: uuid.New().String(),
+				Message: fmt.Sprintf("load test message %d", i+1),
+			}
+
+			// Convert to binary
+			messageBytes, err := json.Marshal(wsMessage)
+			if err != nil {
+				log.Printf("Failed to marshal message: %v", err)
+				continue
+			}
+
+			err = c.WriteMessage(websocket.BinaryMessage, messageBytes)
+			if err != nil {
+				log.Printf("write error: %v", err)
+				return
+			}
+			log.Printf("sent: EventID=%s, Message=%s", wsMessage.EventID, wsMessage.Message)
+
+			// Add a small delay between messages
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	log.Printf("Load test completed: sent %d messages", count)
 }
 
 func callHealthAPI(client *http.Client, addr, basePath string) (*HealthResponse, error) {
@@ -189,68 +302,3 @@ func callVersionAPI(client *http.Client, addr, basePath string) (*VersionRespons
 
 	return &versionResp, nil
 }
-
-// pingTest sends periodic ping messages
-func pingTest(ctx context.Context, c *websocket.Conn) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			err := c.WriteMessage(websocket.TextMessage, []byte("ping"))
-			if err != nil {
-				log.Println("write:", err)
-				return
-			}
-			log.Println("sent: ping")
-		}
-	}
-}
-
-// echoTest reads input from stdin and sends it to the server
-func echoTest(ctx context.Context, c *websocket.Conn) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			var message string
-			fmt.Print("Enter message (or 'quit' to exit): ")
-			fmt.Scanln(&message)
-
-			if message == "quit" {
-				return
-			}
-
-			err := c.WriteMessage(websocket.TextMessage, []byte(message))
-			if err != nil {
-				log.Println("write:", err)
-				return
-			}
-			log.Printf("sent: %s", message)
-		}
-	}
-}
-
-// loadTest sends a specified number of messages as quickly as possible
-func loadTest(ctx context.Context, c *websocket.Conn, count int) {
-	for i := 0; i < count; i++ {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			message := fmt.Sprintf("load test message %d", i+1)
-			err := c.WriteMessage(websocket.TextMessage, []byte(message))
-			if err != nil {
-				log.Printf("write error: %v", err)
-				return
-			}
-			log.Printf("sent: %s", message)
-			time.Sleep(100 * time.Millisecond) // Small delay to prevent overwhelming the server
-		}
-	}
-	log.Printf("Load test complete: sent %d messages", count)
-} 

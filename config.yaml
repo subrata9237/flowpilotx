@@ -112,7 +112,7 @@ metrics:
 # Shared logging configuration
 logging:
   level: "info"
-  format: "json"
+  format: "text" # or "json"
   output_path: "stdout"
 
 # Default server settings

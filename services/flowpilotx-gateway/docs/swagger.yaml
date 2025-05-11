@@ -1,0 +1,81 @@
+basePath: /api/flowpilotx-gateway
+definitions:
+  models.HealthResponse:
+    properties:
+      status:
+        example: UP
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  models.VersionResponse:
+    properties:
+      environment:
+        example: development
+        type: string
+      serviceName:
+        example: flowpilotx-gateway
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@flowpilotx.io
+    name: API Support
+    url: http://www.flowpilotx.io/support
+  description: API documentation for FlowPilotX Gateway service
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: FlowPilotX Gateway API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Get service health status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.HealthResponse'
+      summary: Health check endpoint
+      tags:
+      - Health
+  /version:
+    get:
+      consumes:
+      - application/json
+      description: Get service version information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.VersionResponse'
+      summary: Version information endpoint
+      tags:
+      - Version
+schemes:
+- http
+- https
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
+tags:
+- description: Health check endpoints
+  name: Health
+- description: Version information endpoints
+  name: Version
