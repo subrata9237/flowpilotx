@@ -68,7 +68,7 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 	defer cancel()
 
 	// Log connection attempt
-	s.log.Info(ctx, "WebSocket connection attempt", map[string]interface{}{
+	s.log.InfoWithCtx(ctx, "WebSocket connection attempt", map[string]interface{}{
 		"remote_addr": r.RemoteAddr,
 		"user_agent":  r.UserAgent(),
 	})
@@ -76,7 +76,7 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 	// Upgrade connection to WebSocket
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.log.Error(ctx, "Failed to upgrade connection", map[string]interface{}{
+		s.log.ErrorWithCtx(ctx, "Failed to upgrade connection", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return
@@ -125,7 +125,7 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 		case err := <-errChan:
 			if err != nil {
 				if !websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					s.log.Error(ctx, "WebSocket error", map[string]interface{}{
+					s.log.ErrorWithCtx(ctx, "WebSocket error", map[string]interface{}{
 						"error":       err.Error(),
 						"remote_addr": connID,
 					})
@@ -135,7 +135,7 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 			return
 		case <-ticker.C:
 			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second)); err != nil {
-				s.log.Error(ctx, "Failed to send ping", map[string]interface{}{
+				s.log.ErrorWithCtx(ctx, "Failed to send ping", map[string]interface{}{
 					"error": err.Error(),
 				})
 				return
@@ -161,7 +161,7 @@ func (s *WebSocketService) messageProcessor(ctx context.Context) {
 			return
 		case msg := <-s.msgChan:
 			if err := s.msgProcessor.ProcessMessage(ctx, msg.Type, msg.Payload, msg.Conn); err != nil {
-				s.log.Error(ctx, "Failed to process message", map[string]interface{}{
+				s.log.ErrorWithCtx(ctx, "Failed to process message", map[string]interface{}{
 					"error": err.Error(),
 				})
 			}
@@ -173,7 +173,7 @@ func (s *WebSocketService) messageProcessor(ctx context.Context) {
 func (s *WebSocketService) readHandler(ctx context.Context, conn *websocket.Conn, errChan chan<- error, closeChan chan<- struct{}) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.log.Error(ctx, "Recovered from panic in readHandler", map[string]interface{}{
+			s.log.ErrorWithCtx(ctx, "Recovered from panic in readHandler", map[string]interface{}{
 				"error": r,
 			})
 		}
@@ -191,7 +191,7 @@ func (s *WebSocketService) readHandler(ctx context.Context, conn *websocket.Conn
 			messageType, message, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					s.log.Error(ctx, "WebSocket read error", map[string]interface{}{
+					s.log.ErrorWithCtx(ctx, "WebSocket read error", map[string]interface{}{
 						"error": err.Error(),
 					})
 				}
@@ -207,7 +207,9 @@ func (s *WebSocketService) readHandler(ctx context.Context, conn *websocket.Conn
 			case <-s.done:
 				return
 			default:
-				s.log.Error(ctx, "Message channel full, dropping message", nil)
+				s.log.ErrorWithCtx(ctx, "Message channel full, dropping message", map[string]interface{}{
+					"error": err.Error(),
+				})
 			}
 		}
 	}
@@ -235,7 +237,7 @@ func (s *WebSocketService) cleanupConnection(conn *websocket.Conn, connID string
 	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
 	err := conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(time.Second))
 	if err != nil {
-		s.log.Error(ctx, "Failed to send close message", map[string]interface{}{
+		s.log.ErrorWithCtx(ctx, "Failed to send close message", map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
@@ -244,7 +246,7 @@ func (s *WebSocketService) cleanupConnection(conn *websocket.Conn, connID string
 	conn.Close()
 
 	// Log connection closure
-	s.log.Info(ctx, "WebSocket connection closed", map[string]interface{}{
+	s.log.InfoWithCtx(ctx, "WebSocket connection closed", map[string]interface{}{
 		"remote_addr": connID,
 	})
 }

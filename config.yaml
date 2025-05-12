@@ -50,6 +50,34 @@ flowpilotx_gateway:
     enabled: true
     requests_per_second: 100
     burst: 50
+  
+  temporal:
+    host_port: "localhost:7233"
+    namespace: "default"
+    task_queue: "flowpilotx-task-queue"
+    client:
+      connection_timeout: "5s"
+      rpc_timeout: "10s"
+      rpc_long_poll_timeout: "20s"
+      rpc_query_timeout: "10s"
+      max_retry_attempts: 3
+      initial_interval: "1s"
+      max_interval: "10s"
+      backoff_coefficient: 2.0
+      identity: "flowpilotx-gateway"
+    workflow:
+      execution_timeout: "30m"
+      run_timeout: "30m"
+      task_timeout: "300s"
+      workflow_id_reuse_policy: "AllowDuplicate"
+      retry_policy:
+        initial_interval: "1s"
+        max_interval: "10s"
+        max_attempts: 3
+        backoff_coefficient: 2.0
+        non_retryable_error_types:
+          - "InvalidArgument"
+          - "NotFound"
 
 # FlowPilot Worker Service Configuration
 flowpilotx_worker:
@@ -78,6 +106,8 @@ flowpilotx_worker:
 mongodb:
   uri: "mongodb://localhost:27017"
   database: "flowpilotx"
+  username: "subratasuperadmin"
+  password: "password123"
   options:
     max_pool_size: 100
     min_pool_size: 10
@@ -98,10 +128,23 @@ mongodb:
         - keys: ["task_id", "status", "start_time"]
           options: { background: true }
     worker_events: {}
+    # Gateway collections
+    workflows:
+      indexes:
+        - keys: ["_id"]
+          options: { unique: true }
+    workflow_requests:
+      indexes:
+        - keys: ["_id", "workflow_id"]
+          options: { unique: true }
+    activity_results:
+      indexes:
+        - keys: ["_id", "request_id"]
+          options: { unique: true }
+    gateway_logs: {}
     # Add other service collections here
     workflow_tasks: {}
     workflow_executions: {}
-    gateway_logs: {}
 
 # Shared metrics configuration
 metrics:
@@ -112,7 +155,7 @@ metrics:
 # Shared logging configuration
 logging:
   level: "info"
-  format: "text" # or "json"
+  format: "text"
   output_path: "stdout"
 
 # Default server settings

@@ -3,7 +3,7 @@
 OS := $(shell uname -s)
 ARCH := $(shell uname -m)
 
-.PHONY: setup minikube-install minikube-install-f minikube-start minikube-docker-env minikube-status minikube-stop minikube-delete minikube-deploy-mongo minikube-deploy-redis minikube-deploy-nats-jetstream clear redis-forward nats-forward mongo-forward stop-forward forward-status forward-all help install-redis-cli install-mongo-cli install-all-cli redis-ping redis-cli mongo-cli mongo-ping mongo-cli-auth mongo-create-db mongo-list-dbs mongo-cli-db
+.PHONY: setup minikube-install minikube-install-f minikube-start minikube-docker-env minikube-status minikube-stop minikube-delete minikube-deploy-mongo minikube-deploy-redis minikube-deploy-nats-jetstream minikube-deploy-temporal minikube-deploy-postgres minikube-deploy-postgres-init clear redis-forward nats-forward mongo-forward stop-forward forward-status forward-all help install-redis-cli install-mongo-cli install-all-cli redis-ping redis-cli mongo-cli mongo-ping mongo-cli-auth mongo-create-db mongo-list-dbs mongo-cli-db install-postgres-cli temporal-ui-port-forward temporal-ui-url temporal-cli-install temporal-list-workflows temporal-start-workflow temporal-show-workflow temporal-status temporal-with-minikube-ip
 
 # Function to check if port is in use
 check-port = @if lsof -i :$(1) > /dev/null 2>&1; then \
@@ -33,15 +33,33 @@ setup:
 	@echo "🐱‍🏍 Step 5: Deploying MongoDB as StatefulSet..."
 	@$(MAKE) minikube-deploy-mongo
 	@echo ""
-	@echo "🐱‍🏍 Step 6: Deploying Redis as StatefulSet..."
-	@$(MAKE) minikube-deploy-redis
+	@echo "🐱‍🏍 Step 11: Deploying Temporal DB Secret..."
+	@$(MAKE) minikube-deploy-temporal-secret
 	@echo ""
-	@echo "🐱‍🏍 Step 7: Deploying NATS JetStream as StatefulSet..."
-	@$(MAKE) minikube-deploy-nats-jetstream
+	@echo "🐱‍🏍 Step 12: Deploying Temporal Dynamic Config..."
+	@$(MAKE) minikube-deploy-temporal-dynamic-config
 	@echo ""
-
-	@echo "🔌 Step 8: Setting up port forwarding..."
+	@echo "🐱‍🏍 Step 8: Deploying PostgreSQL Init Config..."
+	@$(MAKE) minikube-deploy-postgres-init
+	@echo ""
+	@echo "🐱‍🏍 Step 9: Deploying PostgreSQL PVC..."
+	@$(MAKE) minikube-deploy-postgres-pvc
+	@echo ""
+	@echo "🐱‍🏍 Step 10: Deploying PostgreSQL as StatefulSet..."
+	@$(MAKE) minikube-deploy-postgres
+	@echo "Waiting for PostgreSQL to be ready..."
+	@kubectl wait --for=condition=ready pod -l app=postgres --timeout=300s
+	@echo ""
+	@echo "🐱‍🏍 Step 12: Deploying Temporal PVC..."
+	@$(MAKE) minikube-deploy-temporal-pvc
+	@echo ""
+	@echo "🐱‍🏍 Step 13: Deploying Temporal as StatefulSet..."
+	@$(MAKE) minikube-deploy-temporal
+	@echo ""
+	@echo "🔌 Step 10: Setting up port forwarding..."
 	@$(MAKE) port-forward-resource-all
+	@$(MAKE) temporal-cli-install
+	@echo "Setup completed successfully"
 
 # 🔒 Private/internal targets (prefixed with 'minikube-')
 
@@ -110,7 +128,7 @@ minikube-deploy-mongo:
 	@kubectl apply -f ./dependency-deployment/mongo-statefulset.yaml
 	@kubectl apply -f ./dependency-deployment/mongo-service.yaml
 	@echo "✅ MongoDB StatefulSet deployed."
-
+#commeent minikube-deploy-redis
 minikube-deploy-redis:
 	@echo "🐱‍🏍 Deploying Redis StatefulSet..."
 	@kubectl apply -f ./dependency-deployment/redis-statefulset.yaml
@@ -122,6 +140,47 @@ minikube-deploy-nats-jetstream:
 	@kubectl apply -f ./dependency-deployment/nats-jetstream-statefulset.yaml
 	@kubectl apply -f ./dependency-deployment/nats-service.yaml
 	@echo "✅ NATS JetStream StatefulSet deployed."
+# Add these new targets to your Makefile
+
+minikube-deploy-temporal-secret:
+	@echo "🔐 Deploying Temporal DB Secret..."
+	@kubectl apply -f ./dependency-deployment/temporal-db-secret.yaml
+	@echo "✅ Temporal DB Secret deployed."
+minikube-deploy-temporal-dynamic-config:
+	@echo "🔐 Deploying Temporal Dynamic Config..."
+	@kubectl apply -f ./dependency-deployment/temporal-dynamic-config.yaml
+	@echo "✅ Temporal Dynamic Config deployed."
+minikube-deploy-temporal-pvc:
+	@echo "💾 Deploying Temporal PVC..."
+	@kubectl apply -f ./dependency-deployment/temporal-pvc.yaml
+	@echo "✅ Temporal PVC deployed."
+
+minikube-deploy-temporal:
+	@echo "🐱‍🏍 Deploying Temporal StatefulSet..."
+	@kubectl apply -f ./dependency-deployment/temporal-statefulset.yaml
+	@kubectl apply -f ./dependency-deployment/temporal-service.yaml
+	@echo "✅ Temporal StatefulSet deployed."
+
+minikube-deploy-postgres-secret:
+	@echo "🔐 Deploying PostgreSQL DB Secret..."
+	@kubectl apply -f ./dependency-deployment/postgres-db-secret.yaml
+	@echo "✅ PostgreSQL DB Secret deployed."	
+
+minikube-deploy-postgres-pvc:
+	@echo "💾 Deploying PostgreSQL PVC..."
+	@kubectl apply -f ./dependency-deployment/postgres-pvc.yaml
+	@echo "✅ PostgreSQL PVC deployed."
+
+minikube-deploy-postgres:
+	@echo "🐱‍🏍 Deploying PostgreSQL StatefulSet..."
+	@kubectl apply -f ./dependency-deployment/postgres-statefulset.yaml
+	@kubectl apply -f ./dependency-deployment/postgres-service.yaml
+	@echo "✅ PostgreSQL StatefulSet deployed."
+
+minikube-deploy-postgres-init:
+	@echo "⚙️ Deploying PostgreSQL Init Config..."
+	@kubectl apply -f ./dependency-deployment/postgres-init-config.yaml
+	@echo "✅ PostgreSQL Init Config deployed."
 
 # 🔥 Clear all Minikube-related resources
 clear:
@@ -139,6 +198,15 @@ delete-dependencies:
 	-kubectl delete -f ./dependency-deployment/redis-service.yaml
 	-kubectl delete -f ./dependency-deployment/nats-jetstream-statefulset.yaml
 	-kubectl delete -f ./dependency-deployment/nats-service.yaml
+	-kubectl delete -f ./dependency-deployment/temporal-statefulset.yaml
+	-kubectl delete -f ./dependency-deployment/temporal-service.yaml
+	-kubectl delete -f ./dependency-deployment/temporal-db-secret.yaml
+	-kubectl delete -f ./dependency-deployment/temporal-pvc.yaml
+	-kubectl delete -f ./dependency-deployment/postgres-statefulset.yaml
+	-kubectl delete -f ./dependency-deployment/postgres-service.yaml
+	-kubectl delete -f ./dependency-deployment/postgres-pvc.yaml
+	-kubectl delete -f ./dependency-deployment/temporal-dynamic-config.yaml
+	-kubectl delete -f ./dependency-deployment/postgres-init-config.yaml
 
 # Start all port forwarding in background
 port-forward-resource-all:
@@ -149,10 +217,14 @@ port-forward-resource-all:
 	@nohup kubectl port-forward svc/redis-wf-cache 6379:6379 > /dev/null 2>&1 &
 	@nohup kubectl port-forward svc/nats-jetstream 4222:4222 8222:8222 > /dev/null 2>&1 &
 	@nohup kubectl port-forward svc/mongo-wf-storage 27017:27017 > /dev/null 2>&1 &
+	@nohup kubectl port-forward svc/temporal 7233:7233 > /dev/null 2>&1 &
+	@nohup kubectl port-forward svc/postgres 5432:5432 > /dev/null 2>&1 &
 	@echo "✅ All port forwarding started. PIDs:"
 	@echo "Redis: $$(pgrep -f "port-forward.*redis-wf-cache")"
 	@echo "NATS: $$(pgrep -f "port-forward.*nats-jetstream")"
 	@echo "MongoDB: $$(pgrep -f "port-forward.*mongo-wf-storage")"
+	@echo "Temporal: $$(pgrep -f "port-forward.*temporal")"
+	@echo "PostgreSQL: $$(pgrep -f "port-forward.*postgres")"
 	@echo "Use 'make forward-status' to check status or 'make stop-forward' to stop all"
 
 # Port forward Redis for external access
@@ -179,6 +251,22 @@ mongo-forward:
 	@$(call check-port,27017)
 	@nohup kubectl port-forward svc/mongo-wf-storage 27017:27017 > /dev/null 2>&1 &
 	@echo "✅ MongoDB port forwarding started. PID: $$(pgrep -f "port-forward.*mongo-wf-storage")"
+
+# Port forward Temporal for external access
+temporal-forward:
+	@echo "🔌 Starting Temporal port forwarding in background..."
+	@$(call check-forward,temporal)
+	@$(call check-port,7233)
+	@nohup kubectl port-forward svc/temporal 7233:7233 > /dev/null 2>&1 &
+	@echo "✅ Temporal port forwarding started. PID: $$(pgrep -f "port-forward.*temporal")"
+
+# Port forward PostgreSQL for external access
+postgres-forward:
+	@echo "🔌 Starting PostgreSQL port forwarding in background..."
+	@$(call check-forward,postgres)
+	@$(call check-port,5432)
+	@nohup kubectl port-forward svc/postgres 5432:5432 > /dev/null 2>&1 &
+	@echo "✅ PostgreSQL port forwarding started. PID: $$(pgrep -f "port-forward.*postgres")"
 
 # Stop all port forwarding
 stop-forward:
@@ -209,14 +297,29 @@ help:
 	@echo "  make minikube-deploy-mongo    - Deploy MongoDB StatefulSet"
 	@echo "  make minikube-deploy-redis    - Deploy Redis StatefulSet"
 	@echo "  make minikube-deploy-nats-jetstream - Deploy NATS JetStream StatefulSet"
+	@echo "  make minikube-deploy-postgres-secret - Deploy PostgreSQL DB Secret"
+	@echo "  make minikube-deploy-postgres-pvc - Deploy PostgreSQL PVC"
+	@echo "  make minikube-deploy-postgres - Deploy PostgreSQL StatefulSet"
+	@echo "  make minikube-deploy-temporal - Deploy Temporal StatefulSet"
+	@echo "  make minikube-deploy-temporal-secret - Deploy Temporal DB Secret"
+	@echo "  make minikube-deploy-temporal-pvc - Deploy Temporal PVC"
+	@echo "  make minikube-deploy-temporal-config - Deploy Temporal Dynamic Config"
 	@echo ""
 	@echo "🔌 Port Forwarding:"
-	@echo "  make port-forward-resource-all - Start all port forwarding (Redis, NATS, MongoDB)"
+	@echo "  make port-forward-resource-all - Start all port forwarding"
 	@echo "  make redis-forward            - Start Redis port forwarding"
 	@echo "  make nats-forward             - Start NATS port forwarding"
 	@echo "  make mongo-forward            - Start MongoDB port forwarding"
+	@echo "  make temporal-forward         - Start Temporal port forwarding"
+	@echo "  make postgres-forward         - Start PostgreSQL port forwarding"
 	@echo "  make forward-status           - Show status of all port forwarding"
 	@echo "  make stop-forward             - Stop all port forwarding"
+	@echo ""
+	@echo "💻 CLI Tools:"
+	@echo "  make install-all-cli          - Install all CLI tools"
+	@echo "  make redis-cli                - Open Redis CLI"
+	@echo "  make mongo-cli                - Open MongoDB CLI"
+	@echo "  make postgres-cli             - Open PostgreSQL CLI"
 	@echo ""
 	@echo "🧹 Cleanup:"
 	@echo "  make clear                    - Clear all Minikube resources"
@@ -237,9 +340,16 @@ install-mongo-cli:
 		brew install mongosh; \
 	fi
 
+install-postgres-cli:
+	@if ! command -v psql >/dev/null 2>&1; then \
+		echo "❌ psql not found. Installing..."; \
+		brew install postgresql@14; \
+	fi
+
 install-all-cli:
 	@$(MAKE) install-redis-cli
 	@$(MAKE) install-mongo-cli
+	@$(MAKE) install-postgres-cli
 
 # Redis CLI commands
 redis-ping:
@@ -439,3 +549,66 @@ mongo-cli-db:
 	fi; \
 	echo "✅ Opening shell for database $$dbname..."; \
 	mongosh mongodb://subratasuperadmin:password123@localhost:27017/$$dbname
+
+# PostgreSQL CLI commands
+postgres-cli:
+	@echo "🔍 Checking if psql is installed..."
+	@if ! command -v psql >/dev/null 2>&1; then \
+		echo "❌ psql not found. Installing..."; \
+		brew install postgresql@14; \
+	fi
+	@echo "🔌 Opening PostgreSQL CLI..."
+	@if ! psql -h localhost -p 5432 -U postgres -d temporal -c '\q' > /dev/null 2>&1; then \
+		echo "❌ PostgreSQL is not accessible. Starting port forwarding..."; \
+		$(MAKE) stop-forward; \
+		sleep 1; \
+		$(MAKE) postgres-forward; \
+		sleep 2; \
+	fi
+	@echo "✅ PostgreSQL is accessible. Opening CLI..."
+	@PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d temporal
+
+temporal-ui-port-forward:
+	@echo "🔌 Starting Temporal UI port forwarding..."
+	@kubectl port-forward services/temporal 7233:7233
+
+temporal-ui-url:
+	@echo "🌐 Temporal UI URL:"
+	@echo "http://$(shell minikube ip):30233"
+
+# Temporal CLI commands
+temporal-cli-install:
+	@echo "Installing Temporal CLI..."
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		brew install temporal; \
+	elif [ "$(shell uname)" = "Linux" ]; then \
+		curl -sSf https://temporal.download/cli.sh | sh; \
+	else \
+		echo "Unsupported OS"; \
+		exit 1; \
+	fi
+
+temporal-list-workflows:
+	@echo "Listing workflows..."
+	@temporal workflow list --address localhost:30233
+
+temporal-start-workflow:
+	@echo "Starting workflow..."
+	@temporal workflow start --address localhost:30233 --workflow-id $(WORKFLOW_ID) --task-queue $(TASK_QUEUE) --workflow-type $(WORKFLOW_TYPE)
+
+temporal-show-workflow:
+	@echo "Showing workflow history..."
+	@temporal workflow show --address localhost:30233 --workflow-id $(WORKFLOW_ID)
+
+temporal-status:
+	@echo "Checking Temporal status..."
+	@kubectl get pods -l app=temporal -n default
+	@kubectl get svc -l app=temporal -n default
+	@echo "If pods are not running, try: make minikube-deploy-temporal"
+
+temporal-with-minikube-ip:
+	@echo "Getting minikube IP..."
+	$(eval MINIKUBE_IP=$(shell minikube ip))
+	@echo "Minikube IP: $(MINIKUBE_IP)"
+	@echo "Testing Temporal connection..."
+	@temporal workflow list --address $(MINIKUBE_IP):30233

@@ -31,7 +31,7 @@ func (s *VersionService) GetVersion(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		s.log.Error(r.Context(), "Failed to encode version response", map[string]interface{}{
+		s.log.ErrorWithCtx(r.Context(), "Failed to encode version response", map[string]interface{}{
 			"error":  err.Error(),
 			"path":   r.URL.Path,
 			"method": r.Method,
@@ -40,7 +40,7 @@ func (s *VersionService) GetVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.log.Debug(r.Context(), "Version info served", map[string]interface{}{
+	s.log.DebugWithCtx(r.Context(), "Version info served", map[string]interface{}{
 		"version":      response.Version,
 		"environment":  response.Environment,
 		"service_name": response.ServiceName,

@@ -58,11 +58,14 @@ func StringToLogLevel(level string) LogLevel {
 
 // LoggerInterface defines the interface for logging operations
 type LoggerInterface interface {
-	Debug(ctx context.Context, msg string, fields map[string]interface{})
-	Info(ctx context.Context, msg string, fields map[string]interface{})
-	Warn(ctx context.Context, msg string, fields map[string]interface{})
-	Error(ctx context.Context, msg string, fields map[string]interface{})
-	Fatal(ctx context.Context, msg string, fields map[string]interface{})
+	DebugWithCtx(ctx context.Context, msg string, fields ...map[string]interface{})
+	Debug(msg string, fields ...map[string]interface{})
+	InfoWithCtx(ctx context.Context, msg string, fields ...map[string]interface{})
+	Info(msg string, fields ...map[string]interface{})
+	WarnWithCtx(ctx context.Context, msg string, fields ...map[string]interface{})
+	Warn(msg string, fields ...map[string]interface{})
+	ErrorWithCtx(ctx context.Context, msg string, fields ...map[string]interface{})
+	Error(msg string, fields ...map[string]interface{})
 	GetEnvironment() string
 	GetApplicationName() string
 }
@@ -159,37 +162,63 @@ func (l *Logger) GetApplicationName() string {
 }
 
 // Debug logs a debug message
-func (l *Logger) Debug(ctx context.Context, msg string, fields map[string]interface{}) {
+func (l *Logger) Debug(msg string, fields ...map[string]interface{}) {
 	if l.level <= Debug {
-		l.log(ctx, "DEBUG", msg, fields)
+		l.log(nil, "DEBUG", msg, fields...)
 	}
 }
 
 // Info logs an info message
-func (l *Logger) Info(ctx context.Context, msg string, fields map[string]interface{}) {
+func (l *Logger) Info(msg string, fields ...map[string]interface{}) {
 	if l.level <= Info {
-		l.log(ctx, "INFO", msg, fields)
+		l.log(nil, "INFO", msg, fields...)
 	}
 }
 
 // Warn logs a warning message
-func (l *Logger) Warn(ctx context.Context, msg string, fields map[string]interface{}) {
+func (l *Logger) Warn(msg string, fields ...map[string]interface{}) {
 	if l.level <= Warn {
-		l.log(ctx, "WARN", msg, fields)
+		l.log(nil, "WARN", msg, fields...)
 	}
 }
 
 // Error logs an error message
-func (l *Logger) Error(ctx context.Context, msg string, fields map[string]interface{}) {
+func (l *Logger) Error(msg string, fields ...map[string]interface{}) {
 	if l.level <= Error {
-		l.log(ctx, "ERROR", msg, fields)
+		l.log(nil, "ERROR", msg, fields...)
 	}
 }
 
 // Fatal logs a fatal message and exits the application
-func (l *Logger) Fatal(ctx context.Context, msg string, fields map[string]interface{}) {
+func (l *Logger) Fatal(msg string, fields ...map[string]interface{}) {
 	if l.level <= Fatal {
-		l.log(ctx, "FATAL", msg, fields)
+		l.log(nil, "FATAL", msg, fields...)
+		os.Exit(1)
+	}
+}
+func (l *Logger) DebugWithCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	if l.level <= Debug {
+		l.log(ctx, "DEBUG", msg, fields...)
+	}
+}
+func (l *Logger) InfoWithCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	if l.level <= Info {
+		l.log(ctx, "INFO", msg, fields...)
+	}
+}
+func (l *Logger) WarnWithCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	if l.level <= Warn {
+		l.log(ctx, "WARN", msg, fields...)
+	}
+}
+func (l *Logger) ErrorWithCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	if l.level <= Error {
+		l.log(ctx, "ERROR", msg, fields...)
+	}
+}
+func (l *Logger) FatalWithCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	if l.level <= Fatal {
+		l.log(ctx, "FATAL", msg, fields...)
 		os.Exit(1)
 	}
 }
@@ -216,7 +245,7 @@ func getContextFields(ctx context.Context) map[string]interface{} {
 }
 
 // log handles the actual logging
-func (l *Logger) log(ctx context.Context, level string, msg string, fields map[string]interface{}) {
+func (l *Logger) log(ctx context.Context, level string, msg string, fields ...map[string]interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -228,12 +257,13 @@ func (l *Logger) log(ctx context.Context, level string, msg string, fields map[s
 	for k, v := range contextFields {
 		allFields[k] = v
 	}
-
-	// Add user-provided fields
-	for k, v := range fields {
-		// Don't override context fields
-		if _, exists := contextFields[k]; !exists {
-			allFields[k] = v
+	if len(fields) > 0 {
+		// Add user-provided fields
+		for k, v := range fields[0] {
+			// Don't override context fields
+			if _, exists := contextFields[k]; !exists {
+				allFields[k] = v
+			}
 		}
 	}
 

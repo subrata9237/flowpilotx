@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flowpilotx/libs/config"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -38,46 +37,6 @@ type Config struct {
 	Direct           bool
 }
 
-// NewConfigFromEnv creates a new Config from environment configuration
-func NewConfigFromEnv() (*Config, error) {
-	cfg, err := config.LoadConfig(config.DefaultConfigPath())
-	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
-	}
-
-	// Get MongoDB development config since it's the only environment we support now
-	mongoConfig := cfg.MongoDB.Development
-
-	return &Config{
-		URI:              mongoConfig.URI,
-		Database:         mongoConfig.Database,
-		Username:         mongoConfig.Username,
-		Password:         mongoConfig.Password,
-		ConnectTimeout:   mongoConfig.ConnectTimeout,
-		OperationTimeout: mongoConfig.OperationTimeout,
-		MaxPoolSize:      mongoConfig.MaxPoolSize,
-		MinPoolSize:      mongoConfig.MinPoolSize,
-		RetryWrites:      mongoConfig.RetryWrites,
-		RetryReads:       mongoConfig.RetryReads,
-		Direct:           mongoConfig.Direct,
-	}, nil
-}
-
-// DefaultConfig returns a default configuration
-func DefaultConfig() *Config {
-	return &Config{
-		URI:              "mongodb://localhost:27017",
-		Database:         "test",
-		ConnectTimeout:   10 * time.Second,
-		OperationTimeout: 5 * time.Second,
-		MaxPoolSize:      100,
-		MinPoolSize:      10,
-		RetryWrites:      true,
-		RetryReads:       true,
-		Direct:           false,
-	}
-}
-
 // Client represents a MongoDB client wrapper
 type Client struct {
 	client   *mongo.Client
@@ -88,11 +47,7 @@ type Client struct {
 // NewClient creates a new MongoDB client with the given configuration
 func NewClient(cfg *Config) (*Client, error) {
 	if cfg == nil {
-		var err error
-		cfg, err = NewConfigFromEnv()
-		if err != nil {
-			cfg = DefaultConfig()
-		}
+		return nil, ErrInvalidConfig
 	}
 
 	if err := validateConfig(cfg); err != nil {

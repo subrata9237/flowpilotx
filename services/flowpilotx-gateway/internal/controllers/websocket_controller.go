@@ -25,7 +25,7 @@ func NewWebSocketController(log logger.LoggerInterface, cfg *config.Config) *Web
 func (c *WebSocketController) HandleWebSocket() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Log incoming WebSocket request
-		c.log.Info(r.Context(), "Incoming WebSocket connection", map[string]interface{}{
+		c.log.InfoWithCtx(r.Context(), "Incoming WebSocket connection", map[string]interface{}{
 			"remote_addr": r.RemoteAddr,
 			"user_agent":  r.UserAgent(),
 			"path":        r.URL.Path,

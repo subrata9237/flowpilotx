@@ -20,7 +20,7 @@ func LoggingMiddleware(log logger.LoggerInterface) func(http.Handler) http.Handl
 				// For WebSocket requests, don't wrap the response writer
 				next.ServeHTTP(w, r)
 				duration := time.Since(start)
-				log.Info(r.Context(), "WebSocket Upgrade Request", map[string]interface{}{
+				log.InfoWithCtx(r.Context(), "WebSocket Upgrade Request", map[string]interface{}{
 					"method":      r.Method,
 					"path":        r.URL.Path,
 					"remote_addr": r.RemoteAddr,
@@ -31,7 +31,7 @@ func LoggingMiddleware(log logger.LoggerInterface) func(http.Handler) http.Handl
 			}
 
 			// Log request start
-			log.Info(r.Context(), "Request started", map[string]interface{}{
+			log.InfoWithCtx(r.Context(), "Request started", map[string]interface{}{
 				"method":      r.Method,
 				"path":        r.URL.Path,
 				"remote_addr": r.RemoteAddr,
@@ -50,7 +50,7 @@ func LoggingMiddleware(log logger.LoggerInterface) func(http.Handler) http.Handl
 
 			// Log request completion
 			duration := time.Since(start)
-			log.Info(r.Context(), "Request completed", map[string]interface{}{
+			log.InfoWithCtx(r.Context(), "Request completed", map[string]interface{}{
 				"method":      r.Method,
 				"path":        r.URL.Path,
 				"remote_addr": r.RemoteAddr,

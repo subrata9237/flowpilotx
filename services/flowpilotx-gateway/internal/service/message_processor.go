@@ -26,7 +26,7 @@ func NewMessageProcessor(log logger.LoggerInterface) *MessageProcessor {
 // ProcessMessage handles incoming WebSocket messages
 func (p *MessageProcessor) ProcessMessage(ctx context.Context, messageType int, payload []byte, conn *websocket.Conn) error {
 
-	p.log.Info(ctx, "Processing message", map[string]interface{}{
+	p.log.InfoWithCtx(ctx, "Processing message", map[string]interface{}{
 		"type":    messageType,
 		"payload": string(payload),
 	})
@@ -74,11 +74,11 @@ func (p *MessageProcessor) handleTextMessage(ctx context.Context, payload []byte
 func (p *MessageProcessor) handleBinaryMessage(ctx context.Context, payload []byte) *models.WebSocketResponse {
 	var wsMessage models.WebSocketMessage
 	if err := json.Unmarshal(payload, &wsMessage); err != nil {
-		p.log.Error(ctx, "Failed to parse binary message", map[string]interface{}{
+		p.log.ErrorWithCtx(ctx, "Failed to parse binary message", map[string]interface{}{
 			"error": err.Error(),
 		})
 		//print wsMessage use p.log methods
-		p.log.Debug(ctx, "Invalid message format", map[string]interface{}{
+		p.log.DebugWithCtx(ctx, "Invalid message format", map[string]interface{}{
 			"error":   err.Error(),
 			"message": wsMessage,
 		})
@@ -113,7 +113,7 @@ func (p *MessageProcessor) handleBinaryMessage(ctx context.Context, payload []by
 func (p *MessageProcessor) sendResponse(ctx context.Context, conn *websocket.Conn, response *models.WebSocketResponse) error {
 	responseBytes, err := json.Marshal(response)
 	if err != nil {
-		p.log.Error(ctx, "Failed to marshal response", map[string]interface{}{
+		p.log.ErrorWithCtx(ctx, "Failed to marshal response", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return err
@@ -121,7 +121,7 @@ func (p *MessageProcessor) sendResponse(ctx context.Context, conn *websocket.Con
 
 	// Set write deadline
 	if err := conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
-		p.log.Error(ctx, "Failed to set write deadline", map[string]interface{}{
+		p.log.ErrorWithCtx(ctx, "Failed to set write deadline", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return err
@@ -129,14 +129,14 @@ func (p *MessageProcessor) sendResponse(ctx context.Context, conn *websocket.Con
 
 	// Send the response
 	if err := conn.WriteMessage(websocket.BinaryMessage, responseBytes); err != nil {
-		p.log.Error(ctx, "Failed to send response", map[string]interface{}{
+		p.log.ErrorWithCtx(ctx, "Failed to send response", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return err
 	}
 
 	// Log the response
-	p.log.Debug(ctx, "Response sent", map[string]interface{}{
+	p.log.DebugWithCtx(ctx, "Response sent", map[string]interface{}{
 		"response": response,
 	})
 
