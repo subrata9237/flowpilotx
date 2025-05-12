@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  labels:
+    app: temporal
+spec:
+  type: NodePort
+  ports:
+    - port: 7233
+      name: frontend
+      nodePort: 30233
+    - port: 7234
+      name: history
+      nodePort: 30234
+    - port: 7235
+      name: matching
+      nodePort: 30235
+    - port: 7236
+      name: worker
+      nodePort: 30236
+  selector:
+    app: temporal

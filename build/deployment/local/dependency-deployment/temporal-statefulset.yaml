@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: temporal
+  labels:
+    app: temporal
+spec:
+  serviceName: temporal
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.22.3
+          ports:
+            - containerPort: 7233
+              name: frontend
+            - containerPort: 7234
+              name: history
+            - containerPort: 7235
+              name: matching
+            - containerPort: 7236
+              name: worker
+          env:
+            - name: DYNAMIC_CONFIG_FILE_PATH
+              value: "/etc/temporal/config/dynamicconfig/production.yaml"
+            - name: SKIP_SCHEMA_SETUP
+              value: "false"
+            - name: DB
+              value: "postgresql"
+            - name: DB_PORT
+              value: "5432"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-db-secret
+                  key: username
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: temporal-db-secret
+                  key: password
+            - name: POSTGRES_SEEDS
+              value: "postgres.default.svc.cluster.local"
+            - name: POSTGRES_SCHEMA
+              value: "public"
+            - name: POSTGRES_CONNECT_PROTOCOL
+              value: "tcp"
+            - name: POSTGRES_CONNECT_ATTRIBUTES
+              value: "sslmode=disable"
+            - name: POSTGRES_CONNECT_TIMEOUT
+              value: "30s"
+          volumeMounts:
+            - name: temporal-data
+              mountPath: /var/lib/temporal
+            - name: temporal-config
+              mountPath: /etc/temporal/config/dynamicconfig
+      volumes:
+        - name: temporal-data
+          persistentVolumeClaim:
+            claimName: temporal-pvc
+        - name: temporal-config
+          configMap:
+            name: temporal-dynamic-config 

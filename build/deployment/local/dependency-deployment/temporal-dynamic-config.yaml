@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-dynamic-config
+data:
+  production.yaml: |
+    history.persistenceMaxQPS:
+      - value: 9000
+        constraints: {}
+    history.persistenceGlobalMaxQPS:
+      - value: 900000
+        constraints: {}
+    history.throttledLogRPS:
+      - value: 100
+        constraints: {}
+    matching.persistenceMaxQPS:
+      - value: 9000
+        constraints: {}
+    matching.persistenceGlobalMaxQPS:
+      - value: 900000
+        constraints: {}
+    matching.throttledLogRPS:
+      - value: 100
+        constraints: {}
+    frontend.enableClientVersionCheck:
+      - value: true
+        constraints: {}
+    frontend.enableTokenNamespaceEnforcement:
+      - value: true
+        constraints: {}

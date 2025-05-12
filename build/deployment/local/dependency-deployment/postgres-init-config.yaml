@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-config
+data:
+  init.sql: |
+    CREATE USER postgres WITH SUPERUSER PASSWORD 'postgres';
+    CREATE DATABASE temporal;
+    CREATE DATABASE temporal_visibility;
+    GRANT ALL PRIVILEGES ON DATABASE temporal TO postgres;
+    GRANT ALL PRIVILEGES ON DATABASE temporal_visibility TO postgres;
