@@ -6,18 +6,22 @@ metadata:
     app: temporal
 spec:
   type: NodePort
-  ports:
-    - port: 7233
-      name: frontend
-      nodePort: 30233
-    - port: 7234
-      name: history
-      nodePort: 30234
-    - port: 7235
-      name: matching
-      nodePort: 30235
-    - port: 7236
-      name: worker
-      nodePort: 30236
   selector:
     app: temporal
+  ports:
+    - name: frontend
+      port: 7233
+      targetPort: 7233
+      nodePort: 30233
+    - name: history
+      port: 7234
+      targetPort: 7234
+      nodePort: 30234
+    - name: matching
+      port: 7235
+      targetPort: 7235
+      nodePort: 30235
+    - name: worker
+      port: 7236
+      targetPort: 7236
+      nodePort: 30236
