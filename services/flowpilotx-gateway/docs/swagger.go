@@ -12,9 +12,9 @@ package docs
 // @license.name  Apache 2.0
 // @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
 
-// @host      localhost:8080
+// @host      localhost:8088
 // @BasePath  /api/flowpilotx-gateway
-// @schemes   http https
+// @schemes   http
 
 // @securityDefinitions.apikey ApiKeyAuth
 // @in header
@@ -25,3 +25,6 @@ package docs
 
 // @tag.name Version
 // @tag.description Version information endpoints
+
+// @tag.name Workflows
+// @tag.description Workflow management endpoints

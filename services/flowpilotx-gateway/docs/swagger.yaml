@@ -1,33 +1,73 @@
 basePath: /api/flowpilotx-gateway
 definitions:
+  models.ActivityResult:
+    properties:
+      activity_id:
+        type: string
+      attempt:
+        type: integer
+      completed_at:
+        type: string
+      error:
+        type: string
+      id:
+        type: string
+      request_id:
+        type: string
+      result: {}
+      started_at:
+        type: string
+    type: object
   models.HealthResponse:
     properties:
       status:
-        example: UP
         type: string
       version:
-        example: 1.0.0
         type: string
     type: object
   models.VersionResponse:
     properties:
       environment:
-        example: development
         type: string
-      serviceName:
-        example: flowpilotx-gateway
+      service_name:
         type: string
       version:
-        example: 1.0.0
         type: string
     type: object
-host: localhost:8080
+  models.WorkflowRequest:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      error:
+        type: string
+      id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      result:
+        additionalProperties: true
+        type: object
+      started_at:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      workflow_id:
+        type: string
+    type: object
+  models.WorkflowSchema:
+    type: object
+host: localhost:8088
 info:
   contact:
     email: support@flowpilotx.io
     name: API Support
     url: http://www.flowpilotx.io/support
-  description: API documentation for FlowPilotX Gateway service
+  description: REST API for FlowPilotX Gateway service
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
@@ -47,9 +87,154 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/models.HealthResponse'
-      summary: Health check endpoint
+      summary: Health check endpoint (v1)
       tags:
       - Health
+  /v1/workflows:
+    post:
+      consumes:
+      - application/json
+      description: Create a new workflow with the provided schema
+      parameters:
+      - description: Workflow schema
+        in: body
+        name: workflow
+        required: true
+        schema:
+          $ref: '#/definitions/models.WorkflowSchema'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.WorkflowSchema'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Create a new workflow
+      tags:
+      - Workflows
+  /v1/workflows/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get workflow details by its ID
+      parameters:
+      - description: Workflow ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.WorkflowSchema'
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Get workflow by ID
+      tags:
+      - Workflows
+  /v1/workflows/{id}/trigger:
+    post:
+      consumes:
+      - application/json
+      description: Trigger a workflow execution by its ID
+      parameters:
+      - description: Workflow ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Workflow input
+        in: body
+        name: input
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Trigger a workflow
+      tags:
+      - Workflows
+  /v1/workflows/request/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get workflow request details by request ID
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.WorkflowRequest'
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Get workflow request
+      tags:
+      - Workflows
+  /v1/workflows/request/{id}/activities:
+    get:
+      consumes:
+      - application/json
+      description: Get activity results for a workflow request
+      parameters:
+      - description: Request ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ActivityResult'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Get workflow activity results
+      tags:
+      - Workflows
   /version:
     get:
       consumes:
@@ -67,15 +252,9 @@ paths:
       - Version
 schemes:
 - http
-- https
 securityDefinitions:
   ApiKeyAuth:
     in: header
     name: Authorization
     type: apiKey
 swagger: "2.0"
-tags:
-- description: Health check endpoints
-  name: Health
-- description: Version information endpoints
-  name: Version

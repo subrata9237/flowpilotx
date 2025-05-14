@@ -5,7 +5,7 @@ BINARY_PATH=$(BUILD_DIR)/$(BINARY_NAME)
 CONFIG_PATH=../../config.yaml
 
 # Server configuration
-HTTP_PORT?=8080
+HTTP_PORT?=8088
 BASE_PATH?=/api/flowpilotx-gateway
 WS_PATH?=/ws/flowpilotx-gateway
 

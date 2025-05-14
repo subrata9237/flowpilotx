@@ -22,6 +22,17 @@ func NewWorkflowController(workflowService service.WorkflowService, logger logge
 	}
 }
 
+// CreateWorkflow godoc
+// @Summary      Create a new workflow
+// @Description  Create a new workflow with the provided schema
+// @Tags         Workflows
+// @Accept       json
+// @Produce      json
+// @Param        workflow  body      models.WorkflowSchema  true  "Workflow schema"
+// @Success      201       {object}  models.WorkflowSchema
+// @Failure      400       {string}  string  "Invalid request"
+// @Failure      500       {string}  string  "Internal server error"
+// @Router       /v1/workflows [post]
 func (c *WorkflowController) CreateWorkflow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var workflow models.WorkflowSchema
@@ -41,6 +52,16 @@ func (c *WorkflowController) CreateWorkflow() http.HandlerFunc {
 	}
 }
 
+// GetWorkflow godoc
+// @Summary      Get workflow by ID
+// @Description  Get workflow details by its ID
+// @Tags         Workflows
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Workflow ID"
+// @Success      200  {object}  models.WorkflowSchema
+// @Failure      500  {string}  string  "Internal server error"
+// @Router       /v1/workflows/{id} [get]
 func (c *WorkflowController) GetWorkflow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -57,6 +78,18 @@ func (c *WorkflowController) GetWorkflow() http.HandlerFunc {
 	}
 }
 
+// TriggerWorkflow godoc
+// @Summary      Trigger a workflow
+// @Description  Trigger a workflow execution by its ID
+// @Tags         Workflows
+// @Accept       json
+// @Produce      json
+// @Param        id    path      string                 true  "Workflow ID"
+// @Param        input body      map[string]interface{} true  "Workflow input"
+// @Success      200   {object}  map[string]string
+// @Failure      400   {string}  string  "Invalid request"
+// @Failure      500   {string}  string  "Internal server error"
+// @Router       /v1/workflows/{id}/trigger [post]
 func (c *WorkflowController) TriggerWorkflow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -80,6 +113,16 @@ func (c *WorkflowController) TriggerWorkflow() http.HandlerFunc {
 	}
 }
 
+// GetWorkflowRequest godoc
+// @Summary      Get workflow request
+// @Description  Get workflow request details by request ID
+// @Tags         Workflows
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Request ID"
+// @Success      200  {object}  models.WorkflowRequest
+// @Failure      500  {string}  string  "Internal server error"
+// @Router       /v1/workflows/request/{id} [get]
 func (c *WorkflowController) GetWorkflowRequest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -96,6 +139,16 @@ func (c *WorkflowController) GetWorkflowRequest() http.HandlerFunc {
 	}
 }
 
+// GetActivityResults godoc
+// @Summary      Get workflow activity results
+// @Description  Get activity results for a workflow request
+// @Tags         Workflows
+// @Accept       json
+// @Produce      json
+// @Param        id   path      string  true  "Request ID"
+// @Success      200  {array}   models.ActivityResult
+// @Failure      500  {string}  string  "Internal server error"
+// @Router       /v1/workflows/request/{id}/activities [get]
 func (c *WorkflowController) GetActivityResults() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)

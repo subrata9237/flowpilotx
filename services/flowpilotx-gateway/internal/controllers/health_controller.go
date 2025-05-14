@@ -29,7 +29,7 @@ func NewHealthController(log logger.LoggerInterface, cfg *config.Config) *Health
 // @Accept       json
 // @Produce      json
 // @Success      200  {object}  models.HealthResponse
-// @Router       /v1/health [get]
+// @Router       /health [get]
 func (c *HealthController) HealthCheck() http.HandlerFunc {
 	return c.service.HealthCheck
 }

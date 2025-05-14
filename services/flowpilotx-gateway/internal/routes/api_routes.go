@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"fmt"
+
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/controllers"
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/middleware"
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/service"
@@ -66,10 +68,11 @@ func (r *Router) initAPIRoutes() {
 	)).Methods("GET")
 
 	// Swagger documentation
-	api.PathPrefix("/swagger/").Handler(httpSwagger.Handler(
-		httpSwagger.URL(r.cfg.FlowpilotxGateway.API.BasePath+"/swagger/doc.json"),
+	swaggerHandler := httpSwagger.Handler(
+		httpSwagger.URL(fmt.Sprintf("%s/swagger/doc.json", r.cfg.FlowpilotxGateway.API.BasePath)),
 		httpSwagger.DeepLinking(true),
 		httpSwagger.DocExpansion("none"),
 		httpSwagger.DomID("swagger-ui"),
-	))
+	)
+	api.PathPrefix("/swagger/").Handler(swaggerHandler)
 }

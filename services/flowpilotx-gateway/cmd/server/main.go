@@ -27,9 +27,9 @@ import (
 // @contact.email  support@flowpilotx.io
 // @license.name  Apache 2.0
 // @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
-// @host      localhost:8080
+// @host      localhost:8088
 // @BasePath  /api/flowpilotx-gateway
-// @schemes   http https
+// @schemes   http
 // @securityDefinitions.apikey ApiKeyAuth
 // @in header
 // @name Authorization
@@ -37,6 +37,8 @@ import (
 // @tag.description Health check endpoints
 // @tag.name Version
 // @tag.description Version information endpoints
+// @tag.name Workflows
+// @tag.description Workflow management endpoints
 
 const (
 	serviceName = "flowpilotx-gateway"
@@ -118,6 +120,11 @@ func startServer(srv *http.Server, cfg *config.Config, log logger.LoggerInterfac
 			"read_timeout":  cfg.FlowpilotxGateway.Server.ReadTimeout,
 			"write_timeout": cfg.FlowpilotxGateway.Server.WriteTimeout,
 			"idle_timeout":  cfg.FlowpilotxGateway.Server.IdleTimeout,
+		})
+		log.Info("Swagger Documentation", map[string]interface{}{
+			"url": fmt.Sprintf("http://localhost:%d%s/swagger/index.html",
+				cfg.FlowpilotxGateway.Server.Port,
+				cfg.FlowpilotxGateway.API.BasePath),
 		})
 		serverErrors <- srv.ListenAndServe()
 	}()
