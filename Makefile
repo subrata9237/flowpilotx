@@ -43,7 +43,7 @@ else
             DETECTED_ARCH := arm64
         else
             DETECTED_ARCH := amd64
-        endifx
+        endif
     else
         DETECTED_OS := Linux
         ifeq ($(UNAME_M),aarch64)

@@ -9,10 +9,16 @@ RELEASE_NAME := temporal
 TEMPORAL_NAMESPACE := temporal
 DEFAULT_NAMESPACE := default
 
-.PHONY: setup install uninstall clean helm-deps port-forward-all
+.PHONY: setup install uninstall clean helm-deps port-forward-all register-namespace
 
 # Main setup command
-setup: minikube-setup helm-setup install port-forward-all
+setup: minikube-setup helm-setup install port-forward-all register-namespace
+
+# Register default namespace in Temporal
+register-namespace:
+	@echo "🔧 Registering default namespace in Temporal..."
+	@kubectl exec -n $(TEMPORAL_NAMESPACE) deployment/temporal-admintools -- tctl --namespace default namespace register --retention 1
+	@echo "✅ Default namespace registered"
 
 # Install required tools
 install-tools:
@@ -132,12 +138,14 @@ port-forward-all:
 	@sleep 1
 	@nohup kubectl port-forward -n $(TEMPORAL_NAMESPACE) svc/$(RELEASE_NAME)-web 8080:8080 > /dev/null 2>&1 &
 	@nohup kubectl port-forward -n $(TEMPORAL_NAMESPACE) svc/$(RELEASE_NAME)-frontend-headless 7233:7233 > /dev/null 2>&1 &
+	@nohup kubectl port-forward -n $(TEMPORAL_NAMESPACE) svc/temporal-cassandra 9042:9042 > /dev/null 2>&1 &
 	@nohup kubectl port-forward -n $(DEFAULT_NAMESPACE) svc/mongo-wf-storage 27017:27017 > /dev/null 2>&1 &
 	@nohup kubectl port-forward -n $(DEFAULT_NAMESPACE) svc/postgres 5432:5432 > /dev/null 2>&1 &
 	@echo "✅ Port forwarding started"
 	@echo "📊 Services available at:"
 	@echo "  - Temporal Web UI: http://localhost:8080"
 	@echo "  - Temporal Frontend: localhost:7233"
+	@echo "  - Cassandra: localhost:9042"
 	@echo "  - MongoDB: localhost:27017 (default namespace)"
 	@echo "  - PostgreSQL: localhost:5432 (default namespace)"
 
