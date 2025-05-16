@@ -95,12 +95,14 @@ flowpilotx_worker:
     max_connection_idle: "180s"
   
   worker:
-    max_concurrent_tasks: 100
-    task_timeout: "30s"
-    retry:
-      max_attempts: 3
-      initial_interval: "1s"
-      max_interval: "5s"
+    num_workers: 5
+    max_queues_per_worker: 10
+    initial_queues:
+      - "flowpilotx-default-queue"
+      - "flowpilotx-high-priority-queue"
+      - "flowpilotx-low-priority-queue"
+      - "flowpilotx-workflow-queue"
+    heartbeat_interval: 30
 
 # Shared MongoDB configuration
 mongodb:
@@ -171,4 +173,23 @@ service_ports:
   worker: 50051
   gateway: 50052
   workflow_manager: 50053
-  tools: 50054 
+  tools: 50054
+
+# Activity Configuration
+flowpilotx_activities:
+  activities:
+    - name: "Add"
+      type: "calculator"
+      queue: "flowpilotx-default-queue"
+      retry_count: 3
+      timeout_seconds: 30
+      description: "Add two numbers"
+      
+    - name: "Multiply"
+      type: "calculator"
+      queue: "flowpilotx-default-queue"
+      retry_count: 3
+      timeout_seconds: 30
+      description: "Multiply two numbers"
+      
+    

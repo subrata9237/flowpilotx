@@ -123,7 +123,7 @@ func NewLogger(config ServiceLogConfig) LoggerInterface {
 	}
 
 	// Create logger with the core
-	logger := zap.New(core, zap.AddCaller())
+	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(2))
 
 	return &Logger{
 		Logger:          logger,
@@ -282,15 +282,15 @@ func (l *Logger) log(ctx context.Context, level string, msg string, fields ...ma
 	// Log using appropriate Zap level
 	switch level {
 	case "DEBUG":
-		l.Logger.Debug(coloredMsg, zapFields...)
+		l.Logger.With(zapFields...).Debug(coloredMsg, zap.Skip())
 	case "INFO":
-		l.Logger.Info(coloredMsg, zapFields...)
+		l.Logger.With(zapFields...).Info(coloredMsg, zap.Skip())
 	case "WARN":
-		l.Logger.Warn(coloredMsg, zapFields...)
+		l.Logger.With(zapFields...).Warn(coloredMsg, zap.Skip())
 	case "ERROR":
-		l.Logger.Error(coloredMsg, zapFields...)
+		l.Logger.With(zapFields...).Error(coloredMsg, zap.Skip())
 	case "FATAL":
-		l.Logger.Fatal(coloredMsg, zapFields...)
+		l.Logger.With(zapFields...).Fatal(coloredMsg, zap.Skip())
 	default:
 		l.Logger.Info(coloredMsg, zapFields...)
 	}

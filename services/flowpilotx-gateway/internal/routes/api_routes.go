@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/flowpilotx/libs/worker"
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/controllers"
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/middleware"
-	"github.com/flowpilotx/services/flowpilotx-gateway/internal/service"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -19,7 +19,7 @@ func (r *Router) initAPIRoutes() {
 	versionController := controllers.NewVersionController(r.log, r.cfg)
 
 	// Initialize services for workflow
-	workflowService := service.NewWorkflowService(
+	workflowService := worker.NewWorkflowService(
 		r.temporalClient,
 		r.mongoClient,
 		r.log,

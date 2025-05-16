@@ -5,17 +5,18 @@ import (
 	"net/http"
 
 	"github.com/flowpilotx/libs/logger"
+	"github.com/flowpilotx/libs/worker"
+	workflowModel "github.com/flowpilotx/libs/worker/model"
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/models"
-	"github.com/flowpilotx/services/flowpilotx-gateway/internal/service"
 	"github.com/gorilla/mux"
 )
 
 type WorkflowController struct {
-	workflowService service.WorkflowService
+	workflowService worker.WorkflowService
 	logger          logger.LoggerInterface
 }
 
-func NewWorkflowController(workflowService service.WorkflowService, logger logger.LoggerInterface) *WorkflowController {
+func NewWorkflowController(workflowService worker.WorkflowService, logger logger.LoggerInterface) *WorkflowController {
 	return &WorkflowController{
 		workflowService: workflowService,
 		logger:          logger,
@@ -35,7 +36,7 @@ func NewWorkflowController(workflowService service.WorkflowService, logger logge
 // @Router       /v1/workflows [post]
 func (c *WorkflowController) CreateWorkflow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var workflow models.WorkflowSchema
+		var workflow workflowModel.WorkflowSchema
 		if err := json.NewDecoder(r.Body).Decode(&workflow); err != nil {
 			c.logger.ErrorWithCtx(r.Context(), "Invalid workflow request", map[string]interface{}{"error": err.Error()})
 			http.Error(w, err.Error(), http.StatusBadRequest)

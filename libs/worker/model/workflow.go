@@ -1,4 +1,4 @@
-package models
+package model
 
 import (
 	"time"
@@ -8,7 +8,9 @@ import (
 
 type WorkflowSchema struct {
 	ID          primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
+	Queue       string               `bson:"queue" json:"queue"`
 	Name        string               `bson:"name" json:"name"`
+	Type        string               `bson:"type" json:"type"`
 	Description string               `bson:"description" json:"description"`
 	Activities  []ActivityDefinition `bson:"activities" json:"activities"`
 	DAG         map[string][]string  `bson:"dag" json:"dag"`
@@ -26,6 +28,7 @@ type ActivityDefinition struct {
 	OutputSchema map[string]interface{} `bson:"output_schema" json:"output_schema"`
 	Config       map[string]interface{} `bson:"config" json:"config"`
 	Retry        *RetryPolicy           `bson:"retry,omitempty" json:"retry,omitempty"`
+	Workflow     *WorkflowSchema        `bson:"workflow,omitempty" json:"workflow,omitempty"` //make omitempty
 }
 
 type RetryPolicy struct {
@@ -48,13 +51,27 @@ type WorkflowRequest struct {
 	CompletedAt *time.Time             `bson:"completed_at,omitempty" json:"completed_at,omitempty"`
 }
 
+type WorkflowResponse struct {
+	ID          primitive.ObjectID     `bson:"_id,omitempty" json:"id"`
+	RequestID   primitive.ObjectID     `bson:"request_id" json:"request_id"`
+	Name        string                 `bson:"name" json:"name"`
+	Description string                 `bson:"description" json:"description"`
+	Activities  []ActivityResult       `bson:"activities" json:"activities"`
+	DAG         map[string][]string    `bson:"dag" json:"dag"`
+	CreatedAt   time.Time              `bson:"created_at" json:"created_at"`
+	UpdatedAt   time.Time              `bson:"updated_at" json:"updated_at"`
+	Status      string                 `bson:"status" json:"status"`
+	Result      map[string]interface{} `bson:"result" json:"result"`
+	Error       string                 `bson:"error,omitempty" json:"error,omitempty"`
+	Version     int                    `bson:"version" json:"version"`
+}
 type ActivityResult struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	RequestID   primitive.ObjectID `bson:"request_id" json:"request_id"`
-	ActivityID  string             `bson:"activity_id" json:"activity_id"`
-	Result      interface{}        `bson:"result" json:"result"`
-	Error       string             `bson:"error,omitempty" json:"error,omitempty"`
-	StartedAt   time.Time          `bson:"started_at" json:"started_at"`
-	CompletedAt *time.Time         `bson:"completed_at,omitempty" json:"completed_at,omitempty"`
-	Attempt     int                `bson:"attempt" json:"attempt"`
+	ID          primitive.ObjectID     `bson:"_id,omitempty" json:"id"`
+	RequestID   primitive.ObjectID     `bson:"request_id" json:"request_id"`
+	ActivityID  string                 `bson:"activity_id" json:"activity_id"`
+	Result      map[string]interface{} `bson:"result" json:"result"`
+	Error       string                 `bson:"error,omitempty" json:"error,omitempty"`
+	StartedAt   *time.Time             `bson:"started_at,omitempty" json:"started_at,omitempty"`
+	CompletedAt *time.Time             `bson:"completed_at,omitempty" json:"completed_at,omitempty"`
+	Attempt     int                    `bson:"attempt" json:"attempt"`
 }

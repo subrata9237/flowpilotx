@@ -1,14 +1,15 @@
-package service
+package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/flowpilotx/libs/config"
 	"github.com/flowpilotx/libs/logger"
 	"github.com/flowpilotx/libs/mongodb"
-	"github.com/flowpilotx/services/flowpilotx-gateway/internal/models"
+	"github.com/flowpilotx/libs/worker/model"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.temporal.io/api/enums/v1"
@@ -16,11 +17,11 @@ import (
 )
 
 type WorkflowService interface {
-	CreateWorkflow(ctx context.Context, workflow *models.WorkflowSchema) error
-	GetWorkflow(ctx context.Context, id string) (*models.WorkflowSchema, error)
+	CreateWorkflow(ctx context.Context, workflow *model.WorkflowSchema) error
+	GetWorkflow(ctx context.Context, id string) (*model.WorkflowSchema, error)
 	TriggerWorkflow(ctx context.Context, workflowID string, input map[string]interface{}) (string, error)
-	GetWorkflowRequest(ctx context.Context, requestID string) (*models.WorkflowRequest, error)
-	GetActivityResults(ctx context.Context, requestID string) ([]*models.ActivityResult, error)
+	GetWorkflowRequest(ctx context.Context, requestID string) (*model.WorkflowRequest, error)
+	GetActivityResults(ctx context.Context, requestID string) ([]*model.ActivityResult, error)
 }
 
 type workflowService struct {
@@ -39,7 +40,7 @@ func NewWorkflowService(temporalClient client.Client, mongoClient *mongodb.Clien
 	}
 }
 
-func (s *workflowService) CreateWorkflow(ctx context.Context, workflow *models.WorkflowSchema) error {
+func (s *workflowService) CreateWorkflow(ctx context.Context, workflow *model.WorkflowSchema) error {
 	workflow.CreatedAt = time.Now()
 	workflow.UpdatedAt = workflow.CreatedAt
 	workflow.Status = "ACTIVE"
@@ -55,13 +56,13 @@ func (s *workflowService) CreateWorkflow(ctx context.Context, workflow *models.W
 	return nil
 }
 
-func (s *workflowService) GetWorkflow(ctx context.Context, id string) (*models.WorkflowSchema, error) {
+func (s *workflowService) GetWorkflow(ctx context.Context, id string) (*model.WorkflowSchema, error) {
 	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid workflow ID: %v", err)
 	}
 
-	var workflow models.WorkflowSchema
+	var workflow model.WorkflowSchema
 	err = s.mongoClient.FindOne(ctx, "workflows", bson.M{"_id": objectID}, &workflow)
 	if err != nil {
 		if err == mongodb.ErrNoDocuments {
@@ -78,15 +79,21 @@ func (s *workflowService) TriggerWorkflow(ctx context.Context, workflowID string
 	if err != nil {
 		return "", err
 	}
-
+	//print workflow
+	s.logger.InfoWithCtx(ctx, "Workflow", map[string]interface{}{
+		"workflow": workflow,
+	})
 	// Validate workflow name
 	if workflow.Name == "" {
 		return "", fmt.Errorf("workflow name cannot be empty")
 	}
-
-	request := &models.WorkflowRequest{
+	workflowInput, err := structToMap(workflow)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert workflow input to map: %v", err)
+	}
+	request := &model.WorkflowRequest{
 		WorkflowID: workflow.ID,
-		Input:      input,
+		Input:      workflowInput,
 		Status:     "PENDING",
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
@@ -98,7 +105,7 @@ func (s *workflowService) TriggerWorkflow(ctx context.Context, workflowID string
 	}
 
 	request.ID = result.InsertedID.(primitive.ObjectID)
-
+	workflowInput["request_id"] = request.ID.Hex()
 	// Get task queue based on workflow name and ID
 	taskQueue := s.getTaskQueue(workflow)
 
@@ -106,13 +113,6 @@ func (s *workflowService) TriggerWorkflow(ctx context.Context, workflowID string
 		ID:                    workflowID,
 		TaskQueue:             taskQueue,
 		WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
-	}
-
-	workflowInput := map[string]interface{}{
-		"workflow_name": workflow.Name,
-		"workflow_id":   workflowID,
-		"request_id":    request.ID.Hex(),
-		"input":         input,
 	}
 
 	// Use workflow.Name for the workflow type
@@ -131,13 +131,13 @@ func (s *workflowService) TriggerWorkflow(ctx context.Context, workflowID string
 	return request.ID.Hex(), nil
 }
 
-func (s *workflowService) GetWorkflowRequest(ctx context.Context, requestID string) (*models.WorkflowRequest, error) {
+func (s *workflowService) GetWorkflowRequest(ctx context.Context, requestID string) (*model.WorkflowRequest, error) {
 	objectID, err := primitive.ObjectIDFromHex(requestID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid request ID: %v", err)
 	}
 
-	var request models.WorkflowRequest
+	var request model.WorkflowRequest
 	err = s.mongoClient.FindOne(ctx, "workflow_requests", bson.M{"_id": objectID}, &request)
 	if err != nil {
 		if err == mongodb.ErrNoDocuments {
@@ -149,7 +149,7 @@ func (s *workflowService) GetWorkflowRequest(ctx context.Context, requestID stri
 	return &request, nil
 }
 
-func (s *workflowService) GetActivityResults(ctx context.Context, requestID string) ([]*models.ActivityResult, error) {
+func (s *workflowService) GetActivityResults(ctx context.Context, requestID string) ([]*model.ActivityResult, error) {
 	objectID, err := primitive.ObjectIDFromHex(requestID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid request ID: %v", err)
@@ -161,7 +161,7 @@ func (s *workflowService) GetActivityResults(ctx context.Context, requestID stri
 	}
 	defer cursor.Close(ctx)
 
-	var results []*models.ActivityResult
+	var results []*model.ActivityResult
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, fmt.Errorf("failed to decode activity results: %v", err)
 	}
@@ -169,7 +169,10 @@ func (s *workflowService) GetActivityResults(ctx context.Context, requestID stri
 	return results, nil
 }
 
-func (s *workflowService) getTaskQueue(workflow *models.WorkflowSchema) string {
+func (s *workflowService) getTaskQueue(workflow *model.WorkflowSchema) string {
+	if workflow.Queue != "" {
+		return workflow.Queue
+	}
 	// Default queue name prefix
 	queuePrefix := "flowpilotx"
 
@@ -215,4 +218,17 @@ func (s *workflowService) getTaskQueue(workflow *models.WorkflowSchema) string {
 	})
 
 	return queueName
+}
+func structToMap(v interface{}) (map[string]interface{}, error) {
+	jsonData, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

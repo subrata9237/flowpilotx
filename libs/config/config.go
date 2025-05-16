@@ -70,9 +70,10 @@ type RateLimitConfig struct {
 
 // WorkerConfig holds worker-specific configuration
 type WorkerConfig struct {
-	MaxConcurrentTasks int           `mapstructure:"max_concurrent_tasks" yaml:"max_concurrent_tasks" env:"MAX_CONCURRENT_TASKS"`
-	TaskTimeout        time.Duration `mapstructure:"task_timeout" yaml:"task_timeout" env:"TASK_TIMEOUT"`
-	Retry              RetryConfig   `mapstructure:"retry" yaml:"retry"`
+	NumWorkers         int      `mapstructure:"num_workers" yaml:"num_workers" env:"NUM_WORKERS"`
+	MaxQueuesPerWorker int      `mapstructure:"max_queues_per_worker" yaml:"max_queues_per_worker" env:"MAX_QUEUES_PER_WORKER"`
+	InitialQueues      []string `mapstructure:"initial_queues" yaml:"initial_queues" env:"INITIAL_QUEUES"`
+	HeartbeatInterval  int      `mapstructure:"heartbeat_interval" yaml:"heartbeat_interval" env:"HEARTBEAT_INTERVAL"`
 }
 
 // RetryConfig holds retry-related configuration
@@ -196,17 +197,41 @@ type ServicePortsConfig struct {
 	Tools           int `mapstructure:"tools" yaml:"tools" env:"TOOLS_PORT"`
 }
 
+// ActivityConfig holds activity-related configuration
+type ActivityConfig struct {
+	Name           string        `mapstructure:"name" yaml:"name"`
+	Type           string        `mapstructure:"type" yaml:"type"`
+	Queue          string        `mapstructure:"queue" yaml:"queue"`
+	RetryCount     int           `mapstructure:"retry_count" yaml:"retry_count"`
+	RetryInterval  time.Duration `mapstructure:"retry_interval" yaml:"retry_interval"`
+	TimeoutSeconds int           `mapstructure:"timeout_seconds" yaml:"timeout_seconds"`
+	Description    string        `mapstructure:"description" yaml:"description"`
+	InputParams    []ParamConfig `mapstructure:"input_params" yaml:"input_params"`
+}
+
+// ParamConfig holds parameter configuration
+type ParamConfig struct {
+	Name string `mapstructure:"name" yaml:"name"`
+	Type string `mapstructure:"type" yaml:"type"`
+}
+
+// ActivitiesConfig holds all activity configurations
+type ActivitiesConfig struct {
+	Activities []ActivityConfig `mapstructure:"activities" yaml:"activities"`
+}
+
 // Config holds base configuration for services
 type Config struct {
-	RootConfig        `mapstructure:",squash" yaml:",inline"`
-	FlowpilotxGateway GatewayConfig       `mapstructure:"flowpilotx_gateway" yaml:"flowpilotx_gateway"`
-	FlowpilotxWorker  WorkerServiceConfig `mapstructure:"flowpilotx_worker" yaml:"flowpilotx_worker"`
-	Service           ServiceConfig       `mapstructure:"service" yaml:"service"`
-	Server            ServerConfig        `mapstructure:"server" yaml:"server"`
-	Metrics           MetricsConfig       `mapstructure:"metrics" yaml:"metrics"`
-	Logging           LoggingConfig       `mapstructure:"logging" yaml:"logging"`
-	MongoDB           MongoDBConfig       `mapstructure:"mongodb" yaml:"mongodb"`
-	ServicePorts      ServicePortsConfig  `mapstructure:"service_ports" yaml:"service_ports"`
+	RootConfig           `mapstructure:",squash" yaml:",inline"`
+	FlowpilotxGateway    GatewayConfig       `mapstructure:"flowpilotx_gateway" yaml:"flowpilotx_gateway"`
+	FlowpilotxWorker     WorkerServiceConfig `mapstructure:"flowpilotx_worker" yaml:"flowpilotx_worker"`
+	Service              ServiceConfig       `mapstructure:"service" yaml:"service"`
+	Server               ServerConfig        `mapstructure:"server" yaml:"server"`
+	Metrics              MetricsConfig       `mapstructure:"metrics" yaml:"metrics"`
+	Logging              LoggingConfig       `mapstructure:"logging" yaml:"logging"`
+	MongoDB              MongoDBConfig       `mapstructure:"mongodb" yaml:"mongodb"`
+	ServicePorts         ServicePortsConfig  `mapstructure:"service_ports" yaml:"service_ports"`
+	FlowpilotxActivities ActivitiesConfig    `mapstructure:"flowpilotx_activities" yaml:"flowpilotx_activities"`
 }
 
 // LoadConfig reads configuration from root config and environment variables
