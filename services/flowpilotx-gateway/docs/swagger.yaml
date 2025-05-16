@@ -61,7 +61,7 @@ definitions:
     type: object
   models.WorkflowSchema:
     type: object
-host: localhost:8088
+host: localhost:8080
 info:
   contact:
     email: support@flowpilotx.io

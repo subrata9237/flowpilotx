@@ -9,7 +9,7 @@ RELEASE_NAME := temporal
 TEMPORAL_NAMESPACE := temporal
 DEFAULT_NAMESPACE := default
 
-.PHONY: setup install uninstall clean helm-deps port-forward-all register-namespace delete-temporal-pods delete-temporal-all port-forward-temporal stop-temporal-forward
+.PHONY: setup install uninstall clean helm-deps port-forward-all register-namespace delete-temporal-pods delete-temporal-all port-forward-temporal stop-temporal-forward check-resources check-storage-resources check-temporal-statefulsets
 
 # Main setup command
 setup: minikube-setup helm-setup install port-forward-all register-namespace
@@ -99,10 +99,15 @@ install-temporal: helm-deps
 		--timeout $(HELM_TIMEOUT) \
 		--set server.replicaCount=1 \
 		--set cassandra.config.cluster_size=1 \
+		--set cassandra.replicaCount=1 \
+		--set cassandra.persistence.enabled=true \
+		--set cassandra.persistence.size=10Gi \
 		--set prometheus.enabled=false \
 		--set grafana.enabled=false \
 		--set elasticsearch.enabled=true \
 		--set elasticsearch.replicas=1 \
+		--set elasticsearch.persistence.enabled=true \
+		--set elasticsearch.persistence.size=10Gi \
 		--set server.image.repository=temporalio/server \
 		--set server.image.tag=latest \
 		--set server.resources.requests.cpu=100m \
@@ -125,13 +130,23 @@ install-postgres:
 # Uninstall all components
 uninstall:
 	@echo "🗑️ Uninstalling all components..."
+	@echo "Removing Temporal Helm release..."
 	@helm uninstall $(RELEASE_NAME) --namespace $(TEMPORAL_NAMESPACE) || true
+	@echo "Removing Temporal PVCs..."
+	@kubectl delete pvc --all -n $(TEMPORAL_NAMESPACE) || true
+	@echo "Removing Temporal ConfigMaps..."
+	@kubectl delete configmap --all -n $(TEMPORAL_NAMESPACE) || true
+	@echo "Removing Temporal Secrets..."
+	@kubectl delete secret --all -n $(TEMPORAL_NAMESPACE) || true
+	@echo "Removing MongoDB components..."
 	@kubectl delete -f ./dependency-deployment/mongo-statefulset.yaml -n $(DEFAULT_NAMESPACE) || true
 	@kubectl delete -f ./dependency-deployment/mongo-service.yaml -n $(DEFAULT_NAMESPACE) || true
+	@echo "Removing PostgreSQL components..."
 	@kubectl delete -f ./dependency-deployment/postgres-statefulset.yaml -n $(DEFAULT_NAMESPACE) || true
 	@kubectl delete -f ./dependency-deployment/postgres-service.yaml -n $(DEFAULT_NAMESPACE) || true
 	@kubectl delete -f ./dependency-deployment/postgres-pvc.yaml -n $(DEFAULT_NAMESPACE) || true
 	@kubectl delete -f ./dependency-deployment/postgres-init-config.yaml -n $(DEFAULT_NAMESPACE) || true
+	@echo "✅ Uninstallation complete"
 
 # Port forwarding
 port-forward-all:
@@ -212,3 +227,63 @@ stop-temporal-forward:
 	@echo "🛑 Stopping Temporal port forwarding..."
 	@pkill -f "kubectl port-forward.*temporal" || true
 	@echo "✅ Temporal port forwarding stopped"
+
+# Check deployment resources
+check-temporal-resources:
+	@echo "📊 Checking deployment resources..."
+	@echo "\n🔄 Temporal namespace deployments:"
+	@kubectl get deployments -n $(TEMPORAL_NAMESPACE) -o custom-columns="NAME:.metadata.name,CPU_REQUEST:.spec.template.spec.containers[0].resources.requests.cpu,CPU_LIMIT:.spec.template.spec.containers[0].resources.limits.cpu,MEMORY_REQUEST:.spec.template.spec.containers[0].resources.requests.memory,MEMORY_LIMIT:.spec.template.spec.containers[0].resources.limits.memory"
+	@echo "\n🔄 Temporal namespace statefulsets:"
+	@kubectl get statefulsets -n $(TEMPORAL_NAMESPACE) -o custom-columns="NAME:.metadata.name,CPU_REQUEST:.spec.template.spec.containers[0].resources.requests.cpu,CPU_LIMIT:.spec.template.spec.containers[0].resources.limits.cpu,MEMORY_REQUEST:.spec.template.spec.containers[0].resources.requests.memory,MEMORY_LIMIT:.spec.template.spec.containers[0].resources.limits.memory"
+	@echo "\n🔄 Default namespace deployments:"
+	@kubectl get deployments -n $(DEFAULT_NAMESPACE) -o custom-columns="NAME:.metadata.name,CPU_REQUEST:.spec.template.spec.containers[0].resources.requests.cpu,CPU_LIMIT:.spec.template.spec.containers[0].resources.limits.cpu,MEMORY_REQUEST:.spec.template.spec.containers[0].resources.requests.memory,MEMORY_LIMIT:.spec.template.spec.containers[0].resources.limits.memory"
+
+# Check Elasticsearch and Cassandra resources
+check-temporal-storage-resources:
+	@echo "📊 Checking storage resources..."
+	@echo "\n🔄 Elasticsearch resources:"
+	@kubectl get statefulset -n $(TEMPORAL_NAMESPACE) -l app.kubernetes.io/name=elasticsearch -o custom-columns="NAME:.metadata.name,CPU_REQUEST:.spec.template.spec.containers[0].resources.requests.cpu,CPU_LIMIT:.spec.template.spec.containers[0].resources.limits.cpu,MEMORY_REQUEST:.spec.template.spec.containers[0].resources.requests.memory,MEMORY_LIMIT:.spec.template.spec.containers[0].resources.limits.memory"
+	@echo "\n🔄 Cassandra resources:"
+	@kubectl get statefulset -n $(TEMPORAL_NAMESPACE) -l app.kubernetes.io/name=cassandra -o custom-columns="NAME:.metadata.name,CPU_REQUEST:.spec.template.spec.containers[0].resources.requests.cpu,CPU_LIMIT:.spec.template.spec.containers[0].resources.limits.cpu,MEMORY_REQUEST:.spec.template.spec.containers[0].resources.requests.memory,MEMORY_LIMIT:.spec.template.spec.containers[0].resources.limits.memory"
+	@echo "\n🔄 Storage PVCs:"
+	@kubectl get pvc -n $(TEMPORAL_NAMESPACE) -o custom-columns="NAME:.metadata.name,STATUS:.status.phase,VOLUME:.spec.volumeName,CAPACITY:.spec.resources.requests.storage"
+
+# Check all statefulset resources in temporal namespace
+check-temporal-statefulsets:
+	@echo "📊 Checking all statefulset resources in temporal namespace..."
+	@echo "\n🔄 All StatefulSets:"
+	@kubectl get statefulset -n $(TEMPORAL_NAMESPACE) -o custom-columns="NAME:.metadata.name,REPLICAS:.spec.replicas,CPU_REQUEST:.spec.template.spec.containers[0].resources.requests.cpu,CPU_LIMIT:.spec.template.spec.containers[0].resources.limits.cpu,MEMORY_REQUEST:.spec.template.spec.containers[0].resources.requests.memory,MEMORY_LIMIT:.spec.template.spec.containers[0].resources.limits.memory"
+	@echo "\n🔄 StatefulSet Pods Status:"
+	@kubectl get pods -n $(TEMPORAL_NAMESPACE) -l app.kubernetes.io/component=statefulset -o custom-columns="NAME:.metadata.name,STATUS:.status.phase,READY:.status.containerStatuses[0].ready,RESTARTS:.status.containerStatuses[0].restartCount"
+	@echo "\n🔄 StatefulSet PVCs:"
+	@kubectl get pvc -n $(TEMPORAL_NAMESPACE) -o custom-columns="NAME:.metadata.name,STATUS:.status.phase,VOLUME:.spec.volumeName,CAPACITY:.spec.resources.requests.storage"
+
+# Uninstall only Temporal components
+uninstall-temporal:
+	@echo "🗑️ Uninstalling Temporal components..."
+	@echo "Removing Temporal Helm release..."
+	@helm uninstall $(RELEASE_NAME) --namespace $(TEMPORAL_NAMESPACE) || true
+	@echo "Removing Temporal PVCs..."
+	@kubectl delete pvc --all -n $(TEMPORAL_NAMESPACE) || true
+	@echo "Removing Temporal ConfigMaps..."
+	@kubectl delete configmap --all -n $(TEMPORAL_NAMESPACE) || true
+	@echo "Removing Temporal Secrets..."
+	@kubectl delete secret --all -n $(TEMPORAL_NAMESPACE) || true
+	@echo "✅ Temporal uninstallation complete"
+
+# Port forwarding for MongoDB
+port-forward-mongo:
+	@echo "🔌 Setting up MongoDB port forwarding..."
+	@echo "Starting MongoDB port forward in background..."
+	@-pkill -f "kubectl port-forward.*mongo" || true
+	@sleep 1
+	@nohup kubectl port-forward -n $(DEFAULT_NAMESPACE) svc/mongo-wf-storage 27017:27017 > /dev/null 2>&1 &
+	@echo "✅ MongoDB port forwarding started"
+	@echo "📊 MongoDB available at:"
+	@echo "  - MongoDB: localhost:27017 (default namespace)"
+
+# Stop MongoDB port forwarding
+stop-mongo-forward:
+	@echo "🛑 Stopping MongoDB port forwarding..."
+	@pkill -f "kubectl port-forward.*mongo" || true
+	@echo "✅ MongoDB port forwarding stopped"
