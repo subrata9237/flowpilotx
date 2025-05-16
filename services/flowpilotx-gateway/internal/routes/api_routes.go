@@ -2,6 +2,7 @@ package routes
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/controllers"
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/middleware"
@@ -10,7 +11,10 @@ import (
 )
 
 func (r *Router) initAPIRoutes() {
-	// Create API controllers
+	// Create API subrouter with base path
+	api := r.router.PathPrefix(r.cfg.FlowpilotxGateway.API.BasePath).Subrouter()
+
+	// Initialize controllers
 	healthController := controllers.NewHealthController(r.log, r.cfg)
 	versionController := controllers.NewVersionController(r.log, r.cfg)
 
@@ -21,51 +25,43 @@ func (r *Router) initAPIRoutes() {
 		r.log,
 		r.cfg,
 	)
-
-	// Create workflow controller
 	workflowController := controllers.NewWorkflowController(workflowService, r.log)
 
-	// Create API subrouter
-	api := r.router.PathPrefix(r.cfg.FlowpilotxGateway.API.BasePath).Subrouter()
-
-	// Health routes
+	// Health and Version routes
 	api.Handle("/health", middleware.Chain(
 		healthController.HealthCheck(),
 		middleware.LoggingMiddleware(r.log),
 	)).Methods("GET")
 
-	// Version routes
 	api.Handle("/version", middleware.Chain(
 		versionController.GetVersion(),
 		middleware.LoggingMiddleware(r.log),
 	)).Methods("GET")
 
-	// Workflow routes
-	workflowRouter := api.PathPrefix(r.cfg.FlowpilotxGateway.API.BasePath + "/v1/workflows").Subrouter()
-	workflowRouter.Handle("", middleware.Chain(
-		workflowController.CreateWorkflow(),
-		middleware.LoggingMiddleware(r.log),
-	)).Methods("POST")
+	// Workflow routes (v1)
+	v1 := api.PathPrefix("/v1").Subrouter()
+	workflowRouter := v1.PathPrefix("/workflows").Subrouter()
 
-	workflowRouter.Handle("/{id}", middleware.Chain(
-		workflowController.GetWorkflow(),
-		middleware.LoggingMiddleware(r.log),
-	)).Methods("GET")
+	// Workflow route definitions
+	workflowRoutes := []struct {
+		path    string
+		handler http.Handler
+		method  string
+	}{
+		{"", workflowController.CreateWorkflow(), "POST"},
+		{"/{id}", workflowController.GetWorkflow(), "GET"},
+		{"/{id}/trigger", workflowController.TriggerWorkflow(), "POST"},
+		{"/request/{id}", workflowController.GetWorkflowRequest(), "GET"},
+		{"/request/{id}/activities", workflowController.GetActivityResults(), "GET"},
+	}
 
-	workflowRouter.Handle("/{id}/trigger", middleware.Chain(
-		workflowController.TriggerWorkflow(),
-		middleware.LoggingMiddleware(r.log),
-	)).Methods("POST")
-
-	workflowRouter.Handle("/request/{id}", middleware.Chain(
-		workflowController.GetWorkflowRequest(),
-		middleware.LoggingMiddleware(r.log),
-	)).Methods("GET")
-
-	workflowRouter.Handle("/request/{id}/activities", middleware.Chain(
-		workflowController.GetActivityResults(),
-		middleware.LoggingMiddleware(r.log),
-	)).Methods("GET")
+	// Register workflow routes
+	for _, route := range workflowRoutes {
+		workflowRouter.Handle(route.path, middleware.Chain(
+			route.handler,
+			middleware.LoggingMiddleware(r.log),
+		)).Methods(route.method)
+	}
 
 	// Swagger documentation
 	swaggerHandler := httpSwagger.Handler(

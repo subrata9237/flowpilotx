@@ -40,6 +40,14 @@ type WebSocketService struct {
 func NewWebSocketService(cfg *config.Config, log logger.LoggerInterface) *WebSocketService {
 	workerCount := 5 // Number of worker goroutines
 	stdlog.SetOutput(io.Discard)
+
+	log.InfoWithCtx(context.Background(), "Initializing WebSocket service", map[string]interface{}{
+		"worker_count":      workerCount,
+		"read_buffer":       cfg.FlowpilotxGateway.WebSocket.ReadBufferSize,
+		"write_buffer":      cfg.FlowpilotxGateway.WebSocket.WriteBufferSize,
+		"handshake_timeout": cfg.FlowpilotxGateway.WebSocket.HandshakeTimeout,
+	})
+
 	// Create upgrader with compression
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:    cfg.FlowpilotxGateway.WebSocket.ReadBufferSize,
@@ -67,20 +75,31 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Log connection attempt
+	// Log connection attempt with detailed information
 	s.log.InfoWithCtx(ctx, "WebSocket connection attempt", map[string]interface{}{
 		"remote_addr": r.RemoteAddr,
 		"user_agent":  r.UserAgent(),
+		"method":      r.Method,
+		"path":        r.URL.Path,
+		"headers":     r.Header,
 	})
 
 	// Upgrade connection to WebSocket
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		s.log.ErrorWithCtx(ctx, "Failed to upgrade connection", map[string]interface{}{
-			"error": err.Error(),
+			"error":       err.Error(),
+			"remote_addr": r.RemoteAddr,
+			"user_agent":  r.UserAgent(),
 		})
 		return
 	}
+
+	// Log successful connection
+	s.log.InfoWithCtx(ctx, "WebSocket connection established", map[string]interface{}{
+		"remote_addr": conn.RemoteAddr().String(),
+		"local_addr":  conn.LocalAddr().String(),
+	})
 
 	// Enable compression if supported
 	conn.EnableWriteCompression(true)
@@ -88,6 +107,12 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 	// Store connection
 	connID := conn.RemoteAddr().String()
 	s.connections.Store(connID, conn)
+
+	// Log connection storage
+	s.log.DebugWithCtx(ctx, "Connection stored", map[string]interface{}{
+		"connection_id":     connID,
+		"total_connections": s.GetConnectionCount(),
+	})
 
 	// Create error channel for goroutine communication
 	errChan := make(chan error, 1)
@@ -97,6 +122,9 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 	conn.SetReadLimit(int64(s.cfg.FlowpilotxGateway.WebSocket.ReadBufferSize))
 	conn.SetReadDeadline(time.Now().Add(s.cfg.FlowpilotxGateway.WebSocket.PongWait))
 	conn.SetPongHandler(func(string) error {
+		s.log.DebugWithCtx(ctx, "Pong received", map[string]interface{}{
+			"connection_id": connID,
+		})
 		return conn.SetReadDeadline(time.Now().Add(s.cfg.FlowpilotxGateway.WebSocket.PongWait))
 	})
 
@@ -114,12 +142,21 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 	for {
 		select {
 		case <-ctx.Done():
+			s.log.DebugWithCtx(ctx, "Context cancelled", map[string]interface{}{
+				"connection_id": connID,
+			})
 			s.cleanupConnection(conn, connID, ctx)
 			return
 		case <-s.done:
+			s.log.DebugWithCtx(ctx, "Service shutdown", map[string]interface{}{
+				"connection_id": connID,
+			})
 			s.cleanupConnection(conn, connID, ctx)
 			return
 		case <-closeChan:
+			s.log.DebugWithCtx(ctx, "Close channel received", map[string]interface{}{
+				"connection_id": connID,
+			})
 			s.cleanupConnection(conn, connID, ctx)
 			return
 		case err := <-errChan:
@@ -128,6 +165,12 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 					s.log.ErrorWithCtx(ctx, "WebSocket error", map[string]interface{}{
 						"error":       err.Error(),
 						"remote_addr": connID,
+						"error_type":  "unexpected",
+					})
+				} else {
+					s.log.InfoWithCtx(ctx, "WebSocket closed normally", map[string]interface{}{
+						"remote_addr": connID,
+						"error":       err.Error(),
 					})
 				}
 			}
@@ -136,10 +179,14 @@ func (s *WebSocketService) HandleConnection(w http.ResponseWriter, r *http.Reque
 		case <-ticker.C:
 			if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(time.Second)); err != nil {
 				s.log.ErrorWithCtx(ctx, "Failed to send ping", map[string]interface{}{
-					"error": err.Error(),
+					"error":         err.Error(),
+					"connection_id": connID,
 				})
 				return
 			}
+			s.log.DebugWithCtx(ctx, "Ping sent", map[string]interface{}{
+				"connection_id": connID,
+			})
 		}
 	}
 }

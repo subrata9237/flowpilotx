@@ -24,22 +24,25 @@ var (
 	addr     = flag.String("addr", "localhost:8080", "gateway server address")
 	basePath = flag.String("base", "/api/flowpilotx-gateway", "base path for all endpoints")
 	wsPath   = flag.String("ws", "/ws/flowpilotx-gateway", "websocket path")
-	testMode = flag.String("mode", "echo", "test mode: ping, echo, or load")
+	testMode = flag.String("mode", "echo", "test mode: ping, echo, load, or workflow")
 	msgCount = flag.Int("n", 10, "number of messages to send in load test")
 )
 
 // Response structures for API endpoints
 type HealthResponse struct {
-	Status string `json:"status"`
+	Status  string `json:"status"`
+	Version string `json:"version"`
 }
 
 type VersionResponse struct {
-	Version string `json:"version"`
+	ServiceName string `json:"service_name"`
+	Version     string `json:"version"`
+	Environment string `json:"environment"`
 }
 
 func main() {
 	flag.Parse()
-	*testMode = "echo"
+
 	// Ensure base path starts with / and doesn't end with /
 	*basePath = "/" + strings.Trim(*basePath, "/")
 
@@ -53,7 +56,7 @@ func main() {
 	if err != nil {
 		log.Printf("Health API error: %v", err)
 	} else {
-		log.Printf("Health Status: %s", healthResp.Status)
+		log.Printf("Health Status: %s, Version: %s", healthResp.Status, healthResp.Version)
 	}
 
 	// Call Version API
@@ -61,26 +64,217 @@ func main() {
 	if err != nil {
 		log.Printf("Version API error: %v", err)
 	} else {
-		log.Printf("Gateway Version: %s", versionResp.Version)
+		log.Printf("Service: %s, Version: %s, Environment: %s",
+			versionResp.ServiceName, versionResp.Version, versionResp.Environment)
 	}
 
-	// WebSocket Connection
-	url := fmt.Sprintf("ws://%s%s", *addr, *wsPath)
+	// Handle different test modes
+	switch *testMode {
+	case "workflow":
+		runWorkflowTest(httpClient, *addr, *basePath)
+	case "ping", "echo", "load":
+		runWebSocketTest(*addr, *wsPath, *testMode, *msgCount)
+	default:
+		log.Printf("Unknown test mode: %s", *testMode)
+		log.Printf("Available modes: workflow, ping, echo, load")
+		return
+	}
+}
+
+func runWorkflowTest(client *http.Client, addr, basePath string) {
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("\nWorkflow Test Menu:\n")
+		fmt.Print("1. Create Workflow\n")
+		fmt.Print("2. Get Workflow\n")
+		fmt.Print("3. Trigger Workflow\n")
+		fmt.Print("4. Get Workflow Request\n")
+		fmt.Print("5. Get Activity Results\n")
+		fmt.Print("q. Quit\n")
+		fmt.Print("Enter choice: ")
+
+		if scanner.Scan() {
+			choice := scanner.Text()
+			switch choice {
+			case "1":
+				createWorkflow(client, addr, basePath)
+			case "2":
+				getWorkflow(client, addr, basePath)
+			case "3":
+				triggerWorkflow(client, addr, basePath)
+			case "4":
+				getWorkflowRequest(client, addr, basePath)
+			case "5":
+				getActivityResults(client, addr, basePath)
+			case "q":
+				return
+			default:
+				log.Printf("Invalid choice: %s", choice)
+			}
+		}
+	}
+}
+
+func createWorkflow(client *http.Client, addr, basePath string) {
+	// Example workflow schema
+	workflow := models.WorkflowSchema{
+		Name:        "test-workflow",
+		Description: "Test workflow created by client",
+		Activities: []models.ActivityDefinition{
+			{
+				ID:   "test-activity",
+				Name: "test-activity",
+				Type: "test",
+				Retry: &models.RetryPolicy{
+					MaxAttempts:        3,
+					InitialInterval:    5 * time.Second,
+					MaxInterval:        30 * time.Second,
+					BackoffCoefficient: 2.0,
+				},
+			},
+		},
+		DAG: map[string][]string{
+			"test-activity": {},
+		},
+	}
+
+	url := fmt.Sprintf("http://%s%s/v1/workflows", addr, basePath)
+	body, err := json.Marshal(workflow)
+	if err != nil {
+		log.Printf("Failed to marshal workflow: %v", err)
+		return
+	}
+
+	resp, err := client.Post(url, "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		log.Printf("Failed to create workflow: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var response models.WorkflowSchema
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("Failed to decode response: %v", err)
+		return
+	}
+
+	log.Printf("Created workflow: ID=%s, Name=%s", response.ID.Hex(), response.Name)
+}
+
+func getWorkflow(client *http.Client, addr, basePath string) {
+	fmt.Print("Enter workflow ID: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return
+	}
+	id := scanner.Text()
+
+	url := fmt.Sprintf("http://%s%s/v1/workflows/%s", addr, basePath, id)
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Printf("Failed to get workflow: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var workflow models.WorkflowSchema
+	if err := json.NewDecoder(resp.Body).Decode(&workflow); err != nil {
+		log.Printf("Failed to decode workflow: %v", err)
+		return
+	}
+
+	log.Printf("Workflow: %+v", workflow)
+}
+
+func triggerWorkflow(client *http.Client, addr, basePath string) {
+	fmt.Print("Enter workflow ID: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return
+	}
+	id := scanner.Text()
+
+	url := fmt.Sprintf("http://%s%s/v1/workflows/%s/trigger", addr, basePath, id)
+	resp, err := client.Post(url, "application/json", nil)
+	if err != nil {
+		log.Printf("Failed to trigger workflow: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var response models.WorkflowRequest
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("Failed to decode response: %v", err)
+		return
+	}
+
+	log.Printf("Triggered workflow: RequestID=%s", response.ID.Hex())
+}
+
+func getWorkflowRequest(client *http.Client, addr, basePath string) {
+	fmt.Print("Enter request ID: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return
+	}
+	id := scanner.Text()
+
+	url := fmt.Sprintf("http://%s%s/v1/workflows/request/%s", addr, basePath, id)
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Printf("Failed to get workflow request: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var request models.WorkflowRequest
+	if err := json.NewDecoder(resp.Body).Decode(&request); err != nil {
+		log.Printf("Failed to decode request: %v", err)
+		return
+	}
+
+	log.Printf("Workflow request: %+v", request)
+}
+
+func getActivityResults(client *http.Client, addr, basePath string) {
+	fmt.Print("Enter request ID: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		return
+	}
+	id := scanner.Text()
+
+	url := fmt.Sprintf("http://%s%s/v1/workflows/request/%s/activities", addr, basePath, id)
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Printf("Failed to get activity results: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var results []models.ActivityResult
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		log.Printf("Failed to decode results: %v", err)
+		return
+	}
+
+	log.Printf("Activity results: %+v", results)
+}
+
+func runWebSocketTest(addr, wsPath, mode string, count int) {
+	url := fmt.Sprintf("ws://%s%s", addr, wsPath)
 	log.Printf("Connecting to WebSocket at %s", url)
 
-	// Set up WebSocket dialer with custom headers
 	dialer := websocket.Dialer{
 		Proxy:             http.ProxyFromEnvironment,
 		HandshakeTimeout:  45 * time.Second,
 		EnableCompression: true,
 	}
 
-	// Add custom headers
 	headers := http.Header{}
 	headers.Add("User-Agent", "FlowPilotX-Client/1.0")
 	headers.Add("Sec-WebSocket-Protocol", "flowpilotx-v1")
 
-	// Connect to WebSocket server
 	c, resp, err := dialer.Dial(url, headers)
 	if err != nil {
 		if resp != nil {
@@ -93,21 +287,13 @@ func main() {
 	}
 	defer c.Close()
 
-	// Log successful connection
-	log.Printf("Connected to WebSocket at %s", url)
-
-	// Create context for the entire client session
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create done channel for graceful shutdown
 	done := make(chan struct{})
-
-	// Setup interrupt handler
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 
-	// Start read goroutine
 	go func() {
 		defer close(done)
 		for {
@@ -122,7 +308,6 @@ func main() {
 					}
 					return
 				}
-				// Parse the response
 				var response models.WebSocketResponse
 				if err := json.Unmarshal(message, &response); err != nil {
 					log.Printf("Failed to parse response: %v", err)
@@ -133,21 +318,16 @@ func main() {
 			}
 		}
 	}()
-
-	// Start test mode goroutine based on the selected mode
-	switch *testMode {
-	case "gg":
+	mode = "echo"
+	switch mode {
+	case "ping":
 		go runPingTest(ctx, c, interrupt)
 	case "echo":
 		go runEchoTest(ctx, c, interrupt)
 	case "load":
-		go runLoadTest(ctx, c, interrupt, *msgCount)
-	default:
-		log.Printf("Unknown test mode: %s", *testMode)
-		return
+		go runLoadTest(ctx, c, interrupt, count)
 	}
 
-	// Wait for interrupt signal
 	select {
 	case <-interrupt:
 		log.Println("Received interrupt signal")
@@ -155,7 +335,6 @@ func main() {
 		log.Println("Connection closed")
 	}
 
-	// Cleanup
 	log.Println("Closing connection...")
 	err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
@@ -202,13 +381,11 @@ func runEchoTest(ctx context.Context, c *websocket.Conn, interrupt chan os.Signa
 					return
 				}
 
-				// Create WebSocket message
 				wsMessage := models.WebSocketMessage{
 					EventID: uuid.New().String(),
 					Message: message,
 				}
 
-				// Convert to binary
 				messageBytes, err := json.Marshal(wsMessage)
 				if err != nil {
 					log.Printf("Failed to marshal message: %v", err)
@@ -234,13 +411,11 @@ func runLoadTest(ctx context.Context, c *websocket.Conn, interrupt chan os.Signa
 		case <-interrupt:
 			return
 		default:
-			// Create test message
 			wsMessage := models.WebSocketMessage{
 				EventID: uuid.New().String(),
 				Message: fmt.Sprintf("load test message %d", i+1),
 			}
 
-			// Convert to binary
 			messageBytes, err := json.Marshal(wsMessage)
 			if err != nil {
 				log.Printf("Failed to marshal message: %v", err)
@@ -254,7 +429,6 @@ func runLoadTest(ctx context.Context, c *websocket.Conn, interrupt chan os.Signa
 			}
 			log.Printf("sent: EventID=%s, Message=%s", wsMessage.EventID, wsMessage.Message)
 
-			// Add a small delay between messages
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
@@ -269,13 +443,8 @@ func callHealthAPI(client *http.Client, addr, basePath string) (*HealthResponse,
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
 	var healthResp HealthResponse
-	if err := json.Unmarshal(body, &healthResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
 		return nil, err
 	}
 
@@ -290,13 +459,8 @@ func callVersionAPI(client *http.Client, addr, basePath string) (*VersionRespons
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
 	var versionResp VersionResponse
-	if err := json.Unmarshal(body, &versionResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&versionResp); err != nil {
 		return nil, err
 	}
 
