@@ -9,7 +9,7 @@ RELEASE_NAME := temporal
 TEMPORAL_NAMESPACE := temporal
 DEFAULT_NAMESPACE := default
 
-.PHONY: setup install uninstall clean helm-deps port-forward-all register-namespace
+.PHONY: setup install uninstall clean helm-deps port-forward-all register-namespace delete-temporal-pods delete-temporal-all port-forward-temporal stop-temporal-forward
 
 # Main setup command
 setup: minikube-setup helm-setup install port-forward-all register-namespace
@@ -81,16 +81,19 @@ verify-env:
 
 # Helm dependencies
 helm-deps:
-	@echo "📦 Adding Helm repositories..."
-	@helm repo add temporal https://go.temporal.io/helm-charts
+	@echo "📦 Checking Helm repositories..."
+	@if ! helm repo list | grep -q "temporalio"; then \
+		echo "Adding Temporal Helm repository..."; \
+		helm repo add temporalio https://go.temporal.io/helm-charts; \
+	fi
 	@helm repo update
 
 # Install all components
 install: verify-env install-temporal install-mongodb
 
-install-temporal:
+install-temporal: helm-deps
 	@echo "🚀 Installing Temporal..."
-	@helm install $(RELEASE_NAME) temporal/temporal \
+	@helm install $(RELEASE_NAME) temporalio/temporal \
 		--namespace $(TEMPORAL_NAMESPACE) \
 		--create-namespace \
 		--timeout $(HELM_TIMEOUT) \
@@ -105,7 +108,7 @@ install-temporal:
 		--set server.resources.requests.cpu=100m \
 		--set server.resources.requests.memory=128Mi \
 		--set server.resources.limits.cpu=200m \
-		--set server.resources.limits.memory=256Mi \
+		--set server.resources.limits.memory=256Mi
 
 install-mongodb:
 	@echo "🚀 Installing MongoDB..."
@@ -175,3 +178,37 @@ status:
 	@kubectl get all --namespace $(DEFAULT_NAMESPACE) -l app=postgres
 	@echo "\n🔄 Port forwards:"
 	@ps aux | grep "kubectl port-forward" | grep -v grep || echo "No port forwarding running"
+
+# Delete all pods in temporal namespace
+delete-temporal-pods:
+	@echo "🗑️ Deleting all pods in temporal namespace..."
+	@kubectl delete pods --all -n $(TEMPORAL_NAMESPACE)
+	@echo "✅ All pods in temporal namespace deleted"
+
+# Delete all resources in temporal namespace
+delete-temporal-all:
+	@echo "🗑️ Deleting all resources in temporal namespace..."
+	@kubectl delete all --all -n $(TEMPORAL_NAMESPACE)
+	@kubectl delete pvc --all -n $(TEMPORAL_NAMESPACE)
+	@kubectl delete configmap --all -n $(TEMPORAL_NAMESPACE)
+	@kubectl delete secret --all -n $(TEMPORAL_NAMESPACE)
+	@echo "✅ All resources in temporal namespace deleted"
+
+# Port forwarding for Temporal
+port-forward-temporal:
+	@echo "🔌 Setting up Temporal port forwarding..."
+	@echo "Starting Temporal port forwards in background..."
+	@-pkill -f "kubectl port-forward.*temporal" || true
+	@sleep 1
+	@nohup kubectl port-forward -n $(TEMPORAL_NAMESPACE) svc/$(RELEASE_NAME)-web 8088:8080 > /dev/null 2>&1 &
+	@nohup kubectl port-forward -n $(TEMPORAL_NAMESPACE) svc/$(RELEASE_NAME)-frontend-headless 7233:7233 > /dev/null 2>&1 &
+	@echo "✅ Temporal port forwarding started"
+	@echo "📊 Temporal services available at:"
+	@echo "  - Temporal Web UI: http://localhost:8088"
+	@echo "  - Temporal Frontend: localhost:7233"
+
+# Stop Temporal port forwarding
+stop-temporal-forward:
+	@echo "🛑 Stopping Temporal port forwarding..."
+	@pkill -f "kubectl port-forward.*temporal" || true
+	@echo "✅ Temporal port forwarding stopped"
