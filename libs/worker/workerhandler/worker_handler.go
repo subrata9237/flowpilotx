@@ -69,6 +69,11 @@ func NewWorkerHandler(temporalClient client.Client, mongoClient *mongodb.Client,
 			"activity_queues_count": len(cfg.ActivityQueues),
 		})
 		defaultConfig = cfg
+	} else {
+		//print config
+		logger.Debug("Using default config", map[string]interface{}{
+			"config": cfg,
+		})
 	}
 
 	workerHandler := &WorkerHandler{
@@ -98,14 +103,14 @@ func (w *WorkerHandler) initializeDefaultWorker() {
 	totalQueueConfig = append(totalQueueConfig, w.config.WorkflowQueues...)
 	totalQueueConfig = append(totalQueueConfig, w.config.ActivityQueues...)
 
-	w.logger.Debug("Creating worker instances", map[string]interface{}{
+	w.logger.Info("Creating worker instances", map[string]interface{}{
 		"total_queues": len(totalQueueConfig),
 	})
 
 	w.flowPilotXWorkers = make([]*FlowPilotXWorker, len(totalQueueConfig))
 
 	for i, qConfig := range totalQueueConfig {
-		w.logger.Debug("Initializing worker", map[string]interface{}{
+		w.logger.Info("Initializing worker", map[string]interface{}{
 			"worker_id":                 i,
 			"queue_name":                qConfig.QueueName,
 			"max_concurrent_activities": qConfig.MaxConcurrentActivityExecutionSize,
@@ -203,14 +208,18 @@ func (w *FlowPilotXWorker) startWorker(ctx context.Context) error {
 
 	// Register workflow and activities
 	w.worker.RegisterWorkflow(w.FlowpilotxWorkflow)
+	w.logger.Debug("Registered workflow", map[string]interface{}{
+		"worker_id": w.WorkerID,
+		"queue":     w.Queue,
+	})
+
 	activities := &activity.Activity{
 		Logger:         w.logger,
 		MongoClient:    w.mongoClient,
 		TemporalClient: w.temporalClient,
 	}
 	w.worker.RegisterActivity(activities)
-
-	w.logger.Debug("Registering workflow and activities", map[string]interface{}{
+	w.logger.Debug("Registered activities", map[string]interface{}{
 		"worker_id": w.WorkerID,
 		"queue":     w.Queue,
 	})

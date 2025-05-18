@@ -7,20 +7,21 @@ import (
 )
 
 type WorkflowSchema struct {
-	ID          primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
-	Queue       string               `bson:"queue" json:"queue"`
-	Name        string               `bson:"name" json:"name"`
-	Category    string               `bson:"category" json:"category"`
-	Team        string               `bson:"team" json:"team"`
-	Priority    string               `bson:"priority" json:"priority"`
-	Type        string               `bson:"type" json:"type"`
-	Description string               `bson:"description" json:"description"`
-	Activities  []ActivityDefinition `bson:"activities" json:"activities"`
-	DAG         map[string][]string  `bson:"dag" json:"dag"`
-	CreatedAt   time.Time            `bson:"created_at" json:"created_at"`
-	UpdatedAt   time.Time            `bson:"updated_at" json:"updated_at"`
-	Status      string               `bson:"status" json:"status"`
-	Version     int                  `bson:"version" json:"version"`
+	ID               primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
+	Queue            string               `bson:"queue" json:"queue"`
+	Name             string               `bson:"name" json:"name"`
+	Category         string               `bson:"category" json:"category"`
+	Team             string               `bson:"team" json:"team"`
+	Priority         string               `bson:"priority" json:"priority"`
+	Type             string               `bson:"type" json:"type"`
+	Description      string               `bson:"description" json:"description"`
+	Activities       []ActivityDefinition `bson:"activities" json:"activities"`
+	ActivityMapIndex map[string]int       `bson:"activity_map_index,omitempty" json:"activity_map_index,omitempty"`
+	DAG              map[string][]string  `bson:"dag" json:"dag"`
+	CreatedAt        time.Time            `bson:"created_at" json:"created_at"`
+	UpdatedAt        time.Time            `bson:"updated_at" json:"updated_at"`
+	Status           string               `bson:"status" json:"status"`
+	Version          int                  `bson:"version" json:"version"`
 }
 
 type ActivityDefinition struct {
@@ -50,17 +51,17 @@ type ActivityConfig struct {
 }
 
 type ActivityTimeout struct {
-	StartToClose    time.Duration `json:"start_to_close" bson:"start_to_close"`
-	ScheduleToStart time.Duration `json:"schedule_to_start" bson:"schedule_to_start"`
-	ScheduleToClose time.Duration `json:"schedule_to_close" bson:"schedule_to_close"`
-	Heartbeat       time.Duration `json:"heartbeat" bson:"heartbeat"`
+	StartToClose    TimeoutDuration `bson:"start_to_close" json:"start_to_close"`       // Store as string in MongoDB
+	ScheduleToStart TimeoutDuration `bson:"schedule_to_start" json:"schedule_to_start"` // Store as string in MongoDB
+	ScheduleToClose TimeoutDuration `bson:"schedule_to_close" json:"schedule_to_close"` // Store as string in MongoDB
+	Heartbeat       TimeoutDuration `bson:"heartbeat" json:"heartbeat"`                 // Store as string in MongoDB
 }
 
 type RetryPolicy struct {
-	MaxAttempts        int           `bson:"max_attempts" json:"max_attempts"`
-	InitialInterval    time.Duration `bson:"initial_interval" json:"initial_interval"`
-	MaxInterval        time.Duration `bson:"max_interval" json:"max_interval"`
-	BackoffCoefficient float64       `bson:"backoff_coefficient" json:"backoff_coefficient"`
+	MaxAttempts        int             `bson:"max_attempts" json:"max_attempts"`
+	InitialInterval    TimeoutDuration `bson:"initial_interval" json:"initial_interval"`
+	MaxInterval        TimeoutDuration `bson:"max_interval" json:"max_interval"`
+	BackoffCoefficient float64         `bson:"backoff_coefficient" json:"backoff_coefficient"`
 }
 
 type Workflow struct {
@@ -81,4 +82,13 @@ type Workflow struct {
 // Add reference types
 type Reference struct {
 	Ref string `json:"$ref"`
+}
+type TimeoutDuration string
+
+func (t TimeoutDuration) ToDuration() time.Duration {
+	duration, err := time.ParseDuration(string(t))
+	if err != nil {
+		return 10 * time.Second
+	}
+	return duration
 }

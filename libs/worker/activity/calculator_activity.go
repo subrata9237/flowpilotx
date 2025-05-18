@@ -31,16 +31,21 @@ func (a *Activity) Add(activity *workerModel.ActivityDefinition) (*workerModel.A
 	}
 
 	result := x + y
-	a.Logger.Info("Add activity completed", map[string]interface{}{
-		"a":      x,
-		"b":      y,
-		"result": result,
-	})
 	activity.OutputSchema = map[string]interface{}{
 		"a":      x,
 		"b":      y,
 		"result": result,
 	}
+
+	a.Logger.Info("Add activity completed", map[string]interface{}{
+		"activity_id": activity.ID,
+		"inputs": map[string]interface{}{
+			"a": x,
+			"b": y,
+		},
+		"result": result,
+	})
+
 	return activity, nil
 }
 

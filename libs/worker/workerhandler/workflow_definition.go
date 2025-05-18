@@ -2,7 +2,6 @@ package workerhandler
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/flowpilotx/libs/worker/model"
@@ -12,6 +11,9 @@ import (
 
 func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model.Workflow) (*model.Workflow, error) {
 	if input == nil || input.WorkflowSchema == nil {
+		w.logger.Error("Invalid workflow input", map[string]interface{}{
+			"error": "workflow or schema is nil",
+		})
 		return nil, fmt.Errorf("invalid workflow input: workflow or schema is nil")
 	}
 	input.Status = "running"
@@ -43,10 +45,30 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 		"workflow_id":      input.WorkflowSchema.ID.Hex(),
 		"dag":              input.WorkflowSchema.DAG,
 	})
-
+	input.WorkflowSchema.ActivityMapIndex = make(map[string]int)
 	// Process activities in DAG order
-	for _, activity := range input.WorkflowSchema.Activities {
+	for index, activity := range input.WorkflowSchema.Activities {
 		activityID := activity.ID
+		input.WorkflowSchema.ActivityMapIndex[activityID] = index
+		// Check if this is a root activity (no dependencies in DAG)
+		deps, hasDeps := input.WorkflowSchema.DAG[activityID]
+		if hasDeps && len(deps) == 0 {
+			// This is a root activity, update only matching keys from parameters
+			if activity.InputSchema == nil {
+				activity.InputSchema = make(map[string]interface{})
+			}
+
+			// Only update keys that exist in parameters
+			for key, value := range input.Parameters {
+				activity.InputSchema[key] = value
+			}
+
+			w.logger.Info("Updated input parameters for root activity", map[string]interface{}{
+				"activity_id":    activityID,
+				"updated_params": input.Parameters,
+				"final_schema":   activity.InputSchema,
+			})
+		}
 
 		// Add detailed activity start log
 		w.logger.Info("Starting activity processing", map[string]interface{}{
@@ -84,11 +106,13 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 
 		// Configure activity options
 		activityOptions := workflow.ActivityOptions{
-			StartToCloseTimeout: activity.Config.Timeout.StartToClose,
-			HeartbeatTimeout:    activity.Config.Timeout.Heartbeat,
+			StartToCloseTimeout: activity.Config.Timeout.StartToClose.ToDuration(),
+			HeartbeatTimeout:    activity.Config.Timeout.Heartbeat.ToDuration(),
 			//TaskQueue:           activity.Queue,
 		}
-
+		w.logger.Info("Activity options", map[string]interface{}{
+			"timeout": activity.Config.Timeout,
+		})
 		// Add activity options log
 		w.logger.Info("Configuring activity options", map[string]interface{}{
 			"activity_id":       activityID,
@@ -108,9 +132,9 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 				return nil, fmt.Errorf("invalid retry attempts for activity %s", activityID)
 			}
 			activityOptions.RetryPolicy = &temporal.RetryPolicy{
-				InitialInterval:    activity.Retry.InitialInterval,
+				InitialInterval:    activity.Retry.InitialInterval.ToDuration(),
 				BackoffCoefficient: activity.Retry.BackoffCoefficient,
-				MaximumInterval:    activity.Retry.MaxInterval,
+				MaximumInterval:    activity.Retry.MaxInterval.ToDuration(),
 				MaximumAttempts:    int32(activity.Retry.MaxAttempts),
 			}
 		}
@@ -138,27 +162,28 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 		if deps, ok := input.WorkflowSchema.DAG[activityID]; ok && len(deps) > 0 {
 			for _, depID := range deps {
 				if !executed[depID] {
-					w.logger.Error("dependency %s not executed for activity %s", map[string]interface{}{
+					w.logger.Error("Dependency not executed", map[string]interface{}{
 						"dependency_id": depID,
 						"activity_id":   activityID,
 					})
 					return w.prepareWorkflowOutput(input, results), fmt.Errorf("dependency %s not executed for activity %s", depID, activityID)
 				}
 
-				depIdx, err := strconv.Atoi(depID)
-				if err != nil {
-					w.logger.Error("invalid dependency ID %s for activity %s: %w", map[string]interface{}{
+				depIdx := input.WorkflowSchema.ActivityMapIndex[depID]
+				if depIdx == -1 {
+					w.logger.Error("Invalid dependency ID", map[string]interface{}{
 						"dependency_id": depID,
 						"activity_id":   activityID,
-						"error":         err.Error(),
 					})
-					return w.prepareWorkflowOutput(input, results), fmt.Errorf("invalid dependency ID %s for activity %s: %w", depID, activityID, err)
+					return w.prepareWorkflowOutput(input, results), fmt.Errorf("invalid dependency ID %s for activity %s", depID, activityID)
 				}
 
 				if depIdx >= len(input.WorkflowSchema.Activities) {
-					w.logger.Error("dependency index out of range for activity %s", map[string]interface{}{
-						"dependency_id": depID,
-						"activity_id":   activityID,
+					w.logger.Error("Dependency index out of range", map[string]interface{}{
+						"dependency_id":    depID,
+						"activity_id":      activityID,
+						"index":            depIdx,
+						"total_activities": len(input.WorkflowSchema.Activities),
 					})
 					return w.prepareWorkflowOutput(input, results), fmt.Errorf("dependency index out of range for activity %s", activityID)
 				}
@@ -169,16 +194,14 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 
 			resolvedInputs, err := resolver.ResolveInputSchema(&activity)
 			if err != nil {
-				w.logger.Error("failed to resolve input schema for activity %s: %w", map[string]interface{}{
+				w.logger.Error("Failed to resolve input schema", map[string]interface{}{
 					"activity_id": activityID,
 					"error":       err.Error(),
 				})
-				return w.prepareWorkflowOutput(input, results), fmt.Errorf("failed to resolve input schema for activity %s: %w", activityID, err)
+				return w.prepareWorkflowOutput(input, results), fmt.Errorf("failed to resolve input schema for activity %s: %v", activityID, err)
 			}
 			activity.InputSchema = resolvedInputs
 		}
-
-		var result model.ActivityDefinition
 
 		// Execute activity
 		if activity.Config.Async {
@@ -202,7 +225,7 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 			activityCtx,
 			activity.Name,
 			activity,
-		).Get(ctx, &result)
+		).Get(ctx, &activity)
 
 		if err != nil {
 			w.logger.Error("failed to execute activity %s: %w", map[string]interface{}{
@@ -212,31 +235,30 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 			return w.prepareWorkflowOutput(input, results), fmt.Errorf("failed to execute activity %s: %w", activityID, err)
 		}
 		now = time.Now()
-		result.EndTime = &now
-		duration := now.Sub(*result.StartTime)
-		result.Duration = &duration
-		result.Status = "completed"
-		result.Error = ""
-		results[activityID] = &result
+		activity.EndTime = &now
+		duration := now.Sub(*activity.StartTime)
+		activity.Duration = &duration
+		activity.Status = "completed"
+		activity.Error = ""
+		results[activityID] = &activity
 		executed[activityID] = true
-		activity = result
 		resolver.activities[activityID] = &activity
 
 		// Add detailed completion metrics
 		w.logger.Info("Activity execution metrics", map[string]interface{}{
 			"activity_id": activityID,
-			"start_time":  result.StartTime,
-			"end_time":    result.EndTime,
-			"duration":    result.Duration,
-			"status":      result.Status,
-			"attempt":     result.Attempt,
+			"start_time":  activity.StartTime,
+			"end_time":    activity.EndTime,
+			"duration":    activity.Duration,
+			"status":      activity.Status,
+			"attempt":     activity.Attempt,
 		})
 
 		w.logger.Info("Activity completed", map[string]interface{}{
 			"activity_id": activityID,
 			"type":        activity.Type,
 			"name":        activity.Name,
-			"result":      result,
+			"result":      activity,
 		})
 	}
 

@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -110,18 +109,6 @@ func (s *workflowService) TriggerWorkflow(ctx context.Context, workflowID string
 		ID:                    workflowID,
 		TaskQueue:             request.WorkflowSchema.Queue,
 		WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
-		/*SearchAttributes: map[string]interface{}{
-			"WorkflowType": workflow.Name,
-			"Environment":  s.config.Environment,
-			"Region":       s.config.Region,
-			"Category":     workflow.Category,
-			"Team":         workflow.Team,
-			"Priority":     workflow.Priority,
-			"Version":      workflow.Version,
-			"RequestID":    request.RequestID.Hex(),
-			"WorkflowID":   workflowID,
-			"WorkflowName": workflow.Name,
-		}*/
 	}
 	workflowNameGeneric := "FlowpilotxWorkflow"
 	_, err = s.temporalClient.ExecuteWorkflow(ctx, options, workflowNameGeneric, request)
@@ -226,17 +213,4 @@ func (s *workflowService) getTaskQueue(workflow *model.WorkflowSchema) string {
 	})
 
 	return queueName
-}
-func structToMap(v interface{}) (map[string]interface{}, error) {
-	jsonData, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(jsonData, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
