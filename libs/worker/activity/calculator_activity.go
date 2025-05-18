@@ -32,8 +32,6 @@ func (a *Activity) Add(activity *workerModel.ActivityDefinition) (*workerModel.A
 
 	result := x + y
 	activity.OutputSchema = map[string]interface{}{
-		"a":      x,
-		"b":      y,
 		"result": result,
 	}
 
