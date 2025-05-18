@@ -6,653 +6,331 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flowpilotx/libs/config"
 	"github.com/flowpilotx/libs/logger"
 	"github.com/flowpilotx/libs/mongodb"
+	activity "github.com/flowpilotx/libs/worker/activity"
 	"github.com/flowpilotx/libs/worker/constants"
-	"github.com/flowpilotx/libs/worker/model"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
 
-// WorkflowWorker handles workflow and activity execution
-type WorkflowWorker struct {
-	temporalClient client.Client
-	mongoClient    *mongodb.Client
-	logger         logger.LoggerInterface
-	activities     *WorkflowActivities
-
-	workers      []worker.Worker
-	workerStatus []model.WorkerStatus
-	workerQueues map[int][]string
-	activeQueues map[string]bool
-	config       model.WorkerConfig
+type WorkerHandler struct {
+	temporalClient    client.Client
+	mongoClient       *mongodb.Client
+	logger            logger.LoggerInterface
+	flowPilotXWorkers []*FlowPilotXWorker
+	config            *config.WorkerConfig
 
 	mu sync.RWMutex
 }
+type FlowPilotXWorker struct {
+	worker         worker.Worker
+	WorkerID       int
+	Name           string
+	Queue          string
+	IsActive       bool
+	LastHeartbeat  time.Time
+	HealthStatus   string
+	ErrorCount     int
+	LastError      string
+	RestartCount   int
+	mu             sync.RWMutex
+	logger         logger.LoggerInterface
+	queueConfig    *config.QueueConfig
+	temporalClient client.Client
+	mongoClient    *mongodb.Client
+}
 
 // NewWorkflowWorker creates a new workflow worker pool
-func NewWorkflowWorker(temporalClient client.Client, mongoClient *mongodb.Client, logger logger.LoggerInterface, config *model.WorkerConfig) *WorkflowWorker {
-	defaultConfig := model.WorkerConfig{
-		NumWorkers:         5,
-		MaxQueuesPerWorker: 5,
-		InitialQueues:      []string{"workflow-task-queue"},
-		HeartbeatInterval:  30,
+func NewWorkerHandler(temporalClient client.Client, mongoClient *mongodb.Client, logger logger.LoggerInterface, cfg *config.WorkerConfig) *WorkerHandler {
+	logger.Info("Initializing new worker handler", map[string]interface{}{
+		"default_queue":   "flowpilotx-default-queue",
+		"config_provided": cfg != nil,
+	})
+
+	defaultConfig := &config.WorkerConfig{
+		WorkflowQueues: []config.QueueConfig{
+			{
+				QueueName:                          "flowpilotx-default-queue",
+				MaxConcurrentActivityExecutionSize: 100,
+				MaxConcurrentWorkflowExecutionSize: 50,
+				Weight:                             1,
+				WorkerActivitiesPerSecond:          100,
+				TaskQueueActivitiesPerSecond:       100,
+			},
+		},
+		HeartbeatInterval: 30,
 	}
 
-	if config != nil {
-		defaultConfig = *config
+	if cfg != nil {
+		logger.Debug("Using provided config instead of default", map[string]interface{}{
+			"workflow_queues_count": len(cfg.WorkflowQueues),
+			"activity_queues_count": len(cfg.ActivityQueues),
+		})
+		defaultConfig = cfg
 	}
 
-	worker := &WorkflowWorker{
+	workerHandler := &WorkerHandler{
 		temporalClient: temporalClient,
 		mongoClient:    mongoClient,
 		logger:         logger,
-		activities:     NewWorkflowActivities(mongoClient, logger),
-		workerQueues:   make(map[int][]string),
-		activeQueues:   make(map[string]bool),
 		config:         defaultConfig,
 	}
 
-	worker.initializeWorkerStatus()
+	workerHandler.initializeDefaultWorker()
 
 	logger.Info("Created new workflow worker pool", map[string]interface{}{
-		"num_workers":           defaultConfig.NumWorkers,
-		"max_queues_per_worker": defaultConfig.MaxQueuesPerWorker,
-		"initial_queues":        defaultConfig.InitialQueues,
+		"num_of_queues": defaultConfig.WorkflowQueues,
 	})
 
-	return worker
+	return workerHandler
 }
 
 // initializeWorkerStatus initializes the worker status array
-func (w *WorkflowWorker) initializeWorkerStatus() {
-	w.workerStatus = make([]model.WorkerStatus, w.config.NumWorkers)
-	for i := 0; i < w.config.NumWorkers; i++ {
-		w.workerStatus[i] = model.WorkerStatus{
-			WorkerID:      i,
-			ActiveQueues:  make([]string, 0),
-			IsActive:      false,
-			LastHeartbeat: time.Now(),
+func (w *WorkerHandler) initializeDefaultWorker() {
+	w.logger.Info("Starting worker initialization", map[string]interface{}{
+		"workflow_queues": len(w.config.WorkflowQueues),
+		"activity_queues": len(w.config.ActivityQueues),
+	})
+
+	totalQueueConfig := make([]config.QueueConfig, 0)
+	totalQueueConfig = append(totalQueueConfig, w.config.WorkflowQueues...)
+	totalQueueConfig = append(totalQueueConfig, w.config.ActivityQueues...)
+
+	w.logger.Debug("Creating worker instances", map[string]interface{}{
+		"total_queues": len(totalQueueConfig),
+	})
+
+	w.flowPilotXWorkers = make([]*FlowPilotXWorker, len(totalQueueConfig))
+
+	for i, qConfig := range totalQueueConfig {
+		w.logger.Debug("Initializing worker", map[string]interface{}{
+			"worker_id":                 i,
+			"queue_name":                qConfig.QueueName,
+			"max_concurrent_activities": qConfig.MaxConcurrentActivityExecutionSize,
+			"max_concurrent_workflows":  qConfig.MaxConcurrentWorkflowExecutionSize,
+		})
+
+		w.flowPilotXWorkers[i] = &FlowPilotXWorker{
+			WorkerID:       i,
+			Name:           fmt.Sprintf("flowpilotx-worker-%d-%s", i, qConfig.QueueName),
+			Queue:          qConfig.QueueName,
+			IsActive:       false,
+			LastHeartbeat:  time.Now(),
+			HealthStatus:   constants.HealthStatusHealthy,
+			ErrorCount:     0,
+			LastError:      "",
+			RestartCount:   0,
+			logger:         w.logger,
+			queueConfig:    &qConfig,
+			temporalClient: w.temporalClient,
+			mongoClient:    w.mongoClient,
 		}
 	}
+
+	w.logger.Info("Worker initialization completed", map[string]interface{}{
+		"total_workers":   len(w.flowPilotXWorkers),
+		"workflow_queues": len(w.config.WorkflowQueues),
+		"activity_queues": len(w.config.ActivityQueues),
+	})
 }
 
-// Start starts the worker pool
-func (w *WorkflowWorker) Start(ctx context.Context) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+// startWorker starts a single worker with its assigned queues
+func (w *WorkerHandler) Start(ctx context.Context) error {
+	w.logger.Info("Starting all workers", map[string]interface{}{
+		"worker_count": len(w.flowPilotXWorkers),
+	})
 
-	w.workers = make([]worker.Worker, w.config.NumWorkers)
+	for i, worker := range w.flowPilotXWorkers {
+		w.logger.Debug("Starting individual worker", map[string]interface{}{
+			"worker_index": i,
+			"worker_id":    worker.WorkerID,
+			"queue":        worker.Queue,
+		})
 
-	// Distribute initial queues
-	if err := w.distributeQueues(w.config.InitialQueues); err != nil {
-		return fmt.Errorf("failed to distribute queues: %v", err)
+		if err := worker.startWorker(ctx); err != nil {
+			w.logger.Error("Failed to start worker", map[string]interface{}{
+				"worker_index": i,
+				"worker_id":    worker.WorkerID,
+				"queue":        worker.Queue,
+				"error":        err.Error(),
+			})
+			return err
+		}
 	}
 
-	// Start workers
-	for workerIndex := 0; workerIndex < w.config.NumWorkers; workerIndex++ {
-		queues := w.workerQueues[workerIndex]
-		if len(queues) == 0 {
-			continue
-		}
-
-		if err := w.startWorker(ctx, workerIndex, queues); err != nil {
-			return fmt.Errorf("failed to start worker %d: %v", workerIndex, err)
-		}
-	}
-
-	// Start health check and heartbeat monitoring
-	go w.startHealthCheck(ctx)
-	go w.startHeartbeatMonitor(ctx)
-
-	return nil
-}
-
-// distributeQueues distributes queues among workers
-func (w *WorkflowWorker) distributeQueues(queues []string) error {
-	if len(queues) == 0 {
-		return fmt.Errorf("no queues to distribute")
-	}
-
-	workerIndex := 0
-	for _, queue := range queues {
-		if w.activeQueues[queue] {
-			continue
-		}
-
-		// Find next worker with capacity
-		for len(w.workerQueues[workerIndex]) >= w.config.MaxQueuesPerWorker {
-			workerIndex = (workerIndex + 1) % w.config.NumWorkers
-		}
-
-		w.workerQueues[workerIndex] = append(w.workerQueues[workerIndex], queue)
-		w.activeQueues[queue] = true
-		w.workerStatus[workerIndex].ActiveQueues = append(w.workerStatus[workerIndex].ActiveQueues, queue)
-	}
-
+	w.logger.Info("All workers started successfully", map[string]interface{}{
+		"total_workers": len(w.flowPilotXWorkers),
+	})
 	return nil
 }
 
 // startWorker starts a single worker with its assigned queues
-func (w *WorkflowWorker) startWorker(ctx context.Context, workerIndex int, queues []string) error {
-	primaryQueue := queues[0]
-	w.logger.InfoWithCtx(ctx, "Starting worker", map[string]interface{}{
-		"worker_index":  workerIndex,
-		"primary_queue": primaryQueue,
-		"all_queues":    queues,
+func (w *FlowPilotXWorker) startWorker(ctx context.Context) error {
+	if ctx.Err() != nil {
+		w.logger.Error("Context cancelled before starting worker", map[string]interface{}{
+			"worker_id": w.WorkerID,
+			"queue":     w.Queue,
+			"error":     ctx.Err().Error(),
+		})
+		return fmt.Errorf("context cancelled before starting worker: %v", ctx.Err())
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.logger.Info("Configuring worker", map[string]interface{}{
+		"worker_id":                 w.WorkerID,
+		"queue":                     w.Queue,
+		"max_concurrent_activities": w.queueConfig.MaxConcurrentActivityExecutionSize,
+		"max_concurrent_workflows":  w.queueConfig.MaxConcurrentWorkflowExecutionSize,
+		"activities_per_second":     w.queueConfig.WorkerActivitiesPerSecond,
 	})
 
-	workerInstance := worker.New(w.temporalClient, primaryQueue, worker.Options{})
+	// Create worker options with context-aware settings
+	options := worker.Options{
+		MaxConcurrentActivityExecutionSize:     w.queueConfig.MaxConcurrentActivityExecutionSize,
+		MaxConcurrentWorkflowTaskExecutionSize: w.queueConfig.MaxConcurrentWorkflowExecutionSize,
+		WorkerActivitiesPerSecond:              float64(w.queueConfig.WorkerActivitiesPerSecond),
+		TaskQueueActivitiesPerSecond:           float64(w.queueConfig.TaskQueueActivitiesPerSecond),
+		EnableLoggingInReplay:                  true,
+		BackgroundActivityContext:              ctx, // Use the provided context for background activities
+	}
+
+	// Create new worker
+	w.worker = worker.New(w.temporalClient, w.Queue, options)
 
 	// Register workflow and activities
-	workerInstance.RegisterWorkflow(w.DynamicWorkflow)
-	workerInstance.RegisterActivity(w.ExecuteActivity)
-	workerInstance.RegisterActivity(w.ExecuteAsyncActivity)
-
-	// Start worker
-	if err := workerInstance.Start(); err != nil {
-		w.workerStatus[workerIndex].HealthStatus = constants.HealthStatusUnhealthy
-		w.workerStatus[workerIndex].LastError = err.Error()
-		w.workerStatus[workerIndex].ErrorCount++
-		return fmt.Errorf("failed to start worker: %v", err)
+	w.worker.RegisterWorkflow(w.FlowpilotxWorkflow)
+	activities := &activity.Activity{
+		Logger:         w.logger,
+		MongoClient:    w.mongoClient,
+		TemporalClient: w.temporalClient,
 	}
+	w.worker.RegisterActivity(activities)
 
-	w.workers[workerIndex] = workerInstance
-	w.workerStatus[workerIndex].IsActive = true
-	w.workerStatus[workerIndex].LastHeartbeat = time.Now()
-	w.workerStatus[workerIndex].HealthStatus = constants.HealthStatusHealthy
-
-	return nil
-}
-
-// startHeartbeatMonitor starts monitoring worker heartbeats
-func (w *WorkflowWorker) startHeartbeatMonitor(ctx context.Context) {
-	ticker := time.NewTicker(time.Duration(w.config.HeartbeatInterval) * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			w.updateHeartbeats()
-		}
-	}
-}
-
-// startHealthCheck starts the health check routine
-func (w *WorkflowWorker) startHealthCheck(ctx context.Context) {
-	w.logger.Info("Starting health check monitor")
-
-	ticker := time.NewTicker(constants.HealthCheckInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			w.checkWorkersHealth(ctx)
-		}
-	}
-}
-
-// checkWorkersHealth checks the health of all workers and restarts unhealthy ones
-func (w *WorkflowWorker) checkWorkersHealth(ctx context.Context) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	now := time.Now()
-	for i, workerStatus := range w.workerStatus {
-		if !workerStatus.IsActive {
-			continue
-		}
-
-		isHealthy := true
-		var reason string
-
-		// Check heartbeat timeout
-		if now.Sub(workerStatus.LastHeartbeat) > constants.HeartbeatTimeout {
-			isHealthy = false
-			reason = "heartbeat timeout"
-		}
-
-		// Check error count
-		if workerStatus.ErrorCount >= constants.MaxErrorCount {
-			isHealthy = false
-			reason = "max errors exceeded"
-		}
-
-		if !isHealthy {
-			w.logger.WarnWithCtx(ctx, "Unhealthy worker detected", map[string]interface{}{
-				"worker_id":      workerStatus.WorkerID,
-				"reason":         reason,
-				"last_heartbeat": workerStatus.LastHeartbeat,
-				"error_count":    workerStatus.ErrorCount,
-			})
-
-			// Attempt to restart the worker
-			if err := w.restartWorker(ctx, i); err != nil {
-				w.logger.ErrorWithCtx(ctx, "Failed to restart worker", map[string]interface{}{
-					"error":     err.Error(),
-					"worker_id": workerStatus.WorkerID,
-				})
-			}
-		}
-	}
-}
-
-// restartWorker restarts a specific worker
-func (w *WorkflowWorker) restartWorker(ctx context.Context, workerIndex int) error {
-	w.logger.InfoWithCtx(ctx, "Attempting to restart worker", map[string]interface{}{
-		"worker_id": workerIndex,
+	w.logger.Debug("Registering workflow and activities", map[string]interface{}{
+		"worker_id": w.WorkerID,
+		"queue":     w.Queue,
 	})
 
-	// Stop the existing worker if it's still running
-	if w.workers[workerIndex] != nil {
-		w.workers[workerIndex].Stop()
+	// Start worker with context monitoring
+	errChan := make(chan error, 1)
+	go func() {
+		if err := w.worker.Start(); err != nil {
+			errChan <- err
+		}
+	}()
+
+	// Monitor for context cancellation or worker start error
+	select {
+	case <-ctx.Done():
+		w.worker.Stop()
+		return fmt.Errorf("worker stopped due to context cancellation: %v", ctx.Err())
+	case err := <-errChan:
+		if err != nil {
+			w.IsActive = false
+			w.HealthStatus = constants.HealthStatusUnhealthy
+			w.LastError = err.Error()
+			w.ErrorCount++
+
+			w.logger.Error("Failed to start worker", map[string]interface{}{
+				"worker_id": w.WorkerID,
+				"queue":     w.Queue,
+				"error":     err.Error(),
+				"context":   ctx.Value("request_id"),
+			})
+			return fmt.Errorf("failed to start worker: %v", err)
+		}
 	}
 
-	// Update worker status
-	w.workerStatus[workerIndex].HealthStatus = constants.HealthStatusRestarting
-	w.workerStatus[workerIndex].RestartCount++
+	w.IsActive = true
+	w.HealthStatus = constants.HealthStatusHealthy
+	w.LastHeartbeat = time.Now()
 
-	// Get the queues that were assigned to this worker
-	queues := w.workerQueues[workerIndex]
-	if len(queues) == 0 {
-		w.logger.WarnWithCtx(ctx, "No queues found for worker", map[string]interface{}{
-			"worker_id": workerIndex,
-		})
-		return nil
-	}
+	w.logger.Info("Worker started successfully", map[string]interface{}{
+		"worker_id": w.WorkerID,
+		"queue":     w.Queue,
+		"status":    w.HealthStatus,
+		"context":   ctx.Value("request_id"),
+	})
 
-	// Start a new worker instance
-	if err := w.startWorker(ctx, workerIndex, queues); err != nil {
-		w.workerStatus[workerIndex].HealthStatus = constants.HealthStatusUnhealthy
-		w.workerStatus[workerIndex].LastError = err.Error()
-		w.workerStatus[workerIndex].ErrorCount++
-		return fmt.Errorf("failed to restart worker %d: %v", workerIndex, err)
-	}
-
-	// Reset error count and update status
-	w.workerStatus[workerIndex].HealthStatus = constants.HealthStatusHealthy
-	w.workerStatus[workerIndex].ErrorCount = 0
-	w.workerStatus[workerIndex].LastError = ""
-
-	w.logger.InfoWithCtx(ctx, "Successfully restarted worker", map[string]interface{}{
-		"worker_id":     workerIndex,
-		"queues":        queues,
-		"restart_count": w.workerStatus[workerIndex].RestartCount,
+	w.logger.Debug("Starting worker execution", map[string]interface{}{
+		"worker_id": w.WorkerID,
+		"queue":     w.Queue,
 	})
 
 	return nil
-}
-
-// updateHeartbeats updates heartbeats for all active workers
-func (w *WorkflowWorker) updateHeartbeats() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	for i, worker := range w.workers {
-		if worker != nil {
-			w.workerStatus[i].LastHeartbeat = time.Now()
-
-			// Save heartbeat to MongoDB
-			collection := w.mongoClient.Collection("worker_heartbeats")
-			opts := options.Update().SetUpsert(true)
-			_, err := collection.UpdateOne(
-				context.Background(),
-				map[string]interface{}{"worker_id": i},
-				map[string]interface{}{
-					"$set": w.workerStatus[i],
-				},
-				opts,
-			)
-
-			if err != nil {
-				w.logger.Error("Failed to update heartbeat", map[string]interface{}{
-					"error":     err.Error(),
-					"worker_id": i,
-				})
-				w.workerStatus[i].ErrorCount++
-				w.workerStatus[i].LastError = err.Error()
-			}
-		}
-	}
-}
-
-// AddQueue adds a new queue to the worker pool
-func (w *WorkflowWorker) AddQueue(ctx context.Context, queue string) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	w.logger.InfoWithCtx(ctx, "Starting queue addition process", map[string]interface{}{
-		"queue":                 queue,
-		"current_active_queues": w.activeQueues,
-		"num_workers":           w.config.NumWorkers,
-		"max_queues_per_worker": w.config.MaxQueuesPerWorker,
-	})
-
-	if w.activeQueues[queue] {
-		w.logger.WarnWithCtx(ctx, "Queue already exists", map[string]interface{}{
-			"queue": queue,
-		})
-		return fmt.Errorf("queue %s already exists", queue)
-	}
-
-	// Step 1: Try to find a worker under max capacity
-	targetWorker := -1
-	w.logger.InfoWithCtx(ctx, "Starting worker selection - Phase 1", map[string]interface{}{
-		"phase": "under_capacity_search",
-	})
-
-	// First try: Look for workers under max capacity
-	for i := 0; i < w.config.NumWorkers; i++ {
-		currentQueueCount := len(w.workerQueues[i])
-		w.logger.DebugWithCtx(ctx, "Checking worker capacity", map[string]interface{}{
-			"worker_index":      i,
-			"current_queues":    currentQueueCount,
-			"max_queues":        w.config.MaxQueuesPerWorker,
-			"is_under_capacity": currentQueueCount < w.config.MaxQueuesPerWorker,
-		})
-
-		if currentQueueCount < w.config.MaxQueuesPerWorker {
-			targetWorker = i
-			w.logger.InfoWithCtx(ctx, "Found worker under capacity", map[string]interface{}{
-				"worker_index":       targetWorker,
-				"current_queues":     currentQueueCount,
-				"available_capacity": w.config.MaxQueuesPerWorker - currentQueueCount,
-			})
-			break
-		}
-	}
-
-	// Step 2: If no worker under capacity, find least loaded worker
-	if targetWorker == -1 {
-		w.logger.InfoWithCtx(ctx, "No workers under capacity, starting Phase 2", map[string]interface{}{
-			"phase": "least_loaded_search",
-		})
-
-		minQueues := len(w.workerQueues[0])
-		targetWorker = 0
-
-		// Find the least loaded worker
-		for i := 1; i < w.config.NumWorkers; i++ {
-			currentQueueCount := len(w.workerQueues[i])
-			w.logger.DebugWithCtx(ctx, "Comparing worker loads", map[string]interface{}{
-				"worker_index":      i,
-				"current_queues":    currentQueueCount,
-				"min_queues_so_far": minQueues,
-			})
-
-			if currentQueueCount < minQueues {
-				minQueues = currentQueueCount
-				targetWorker = i
-				w.logger.DebugWithCtx(ctx, "Found new least loaded worker", map[string]interface{}{
-					"new_target_worker": i,
-					"queue_count":       currentQueueCount,
-				})
-			}
-		}
-
-		w.logger.InfoWithCtx(ctx, "Selected least loaded worker", map[string]interface{}{
-			"worker_index":    targetWorker,
-			"current_queues":  minQueues,
-			"will_exceed_max": (minQueues + 1) > w.config.MaxQueuesPerWorker,
-		})
-	}
-
-	// Step 3: Add queue to selected worker
-	w.logger.InfoWithCtx(ctx, "Adding queue to worker", map[string]interface{}{
-		"phase":         "queue_assignment",
-		"worker_index":  targetWorker,
-		"queue":         queue,
-		"worker_queues": w.workerQueues[targetWorker],
-	})
-
-	w.workerQueues[targetWorker] = append(w.workerQueues[targetWorker], queue)
-	w.activeQueues[queue] = true
-	w.workerStatus[targetWorker].ActiveQueues = append(w.workerStatus[targetWorker].ActiveQueues, queue)
-	w.workerStatus[targetWorker].LastHeartbeat = time.Now()
-
-	// Step 4: Restart worker with all queues
-	w.logger.InfoWithCtx(ctx, "Initiating worker restart", map[string]interface{}{
-		"phase":        "worker_restart",
-		"worker_index": targetWorker,
-		"total_queues": len(w.workerQueues[targetWorker]),
-		"all_queues":   w.workerQueues[targetWorker],
-	})
-
-	if err := w.restartWorker(ctx, targetWorker); err != nil {
-		w.logger.ErrorWithCtx(ctx, "Worker restart failed", map[string]interface{}{
-			"error":        err.Error(),
-			"worker_index": targetWorker,
-			"new_queue":    queue,
-			"all_queues":   w.workerQueues[targetWorker],
-		})
-		return fmt.Errorf("failed to restart worker after adding queue: %v", err)
-	}
-
-	// Step 5: Calculate and log final metrics
-	newQueueCount := len(w.workerQueues[targetWorker])
-	workerLoadPercentage := float64(newQueueCount) / float64(w.config.MaxQueuesPerWorker) * 100
-	distribution := w.getQueueDistribution()
-
-	w.logger.InfoWithCtx(ctx, "Queue addition completed successfully", map[string]interface{}{
-		"phase":              "completion",
-		"queue":              queue,
-		"worker_index":       targetWorker,
-		"final_queues":       w.workerQueues[targetWorker],
-		"queue_count":        newQueueCount,
-		"load_percentage":    workerLoadPercentage,
-		"worker_status":      w.workerStatus[targetWorker],
-		"queue_distribution": distribution,
-	})
-
-	return nil
-}
-
-// getQueueDistribution returns the current distribution of queues across workers
-func (w *WorkflowWorker) getQueueDistribution() map[int]struct {
-	QueueCount   int      `json:"queue_count"`
-	Queues       []string `json:"queues"`
-	IsOverMax    bool     `json:"is_over_max"`
-	LoadPercent  float64  `json:"load_percent"`
-	ExcessQueues int      `json:"excess_queues,omitempty"`
-} {
-	dist := make(map[int]struct {
-		QueueCount   int      `json:"queue_count"`
-		Queues       []string `json:"queues"`
-		IsOverMax    bool     `json:"is_over_max"`
-		LoadPercent  float64  `json:"load_percent"`
-		ExcessQueues int      `json:"excess_queues,omitempty"`
-	})
-
-	for workerID, queues := range w.workerQueues {
-		queueCount := len(queues)
-		isOverMax := queueCount > w.config.MaxQueuesPerWorker
-
-		dist[workerID] = struct {
-			QueueCount   int      `json:"queue_count"`
-			Queues       []string `json:"queues"`
-			IsOverMax    bool     `json:"is_over_max"`
-			LoadPercent  float64  `json:"load_percent"`
-			ExcessQueues int      `json:"excess_queues,omitempty"`
-		}{
-			QueueCount:   queueCount,
-			Queues:       queues,
-			IsOverMax:    isOverMax,
-			LoadPercent:  float64(queueCount) / float64(w.config.MaxQueuesPerWorker) * 100,
-			ExcessQueues: max(0, queueCount-w.config.MaxQueuesPerWorker),
-		}
-	}
-
-	return dist
-}
-
-// RemoveQueue removes a queue from the worker pool
-func (w *WorkflowWorker) RemoveQueue(ctx context.Context, queue string) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if !w.activeQueues[queue] {
-		return fmt.Errorf("queue %s does not exist", queue)
-	}
-
-	// Find worker handling this queue
-	for workerIndex, queues := range w.workerQueues {
-		for i, q := range queues {
-			if q == queue {
-				// Remove queue
-				w.workerQueues[workerIndex] = append(queues[:i], queues[i+1:]...)
-				delete(w.activeQueues, queue)
-
-				// Update worker status
-				for i, q := range w.workerStatus[workerIndex].ActiveQueues {
-					if q == queue {
-						w.workerStatus[workerIndex].ActiveQueues = append(
-							w.workerStatus[workerIndex].ActiveQueues[:i],
-							w.workerStatus[workerIndex].ActiveQueues[i+1:]...,
-						)
-						break
-					}
-				}
-
-				w.logger.InfoWithCtx(ctx, "Removed queue", map[string]interface{}{
-					"queue":        queue,
-					"worker_index": workerIndex,
-				})
-				return nil
-			}
-		}
-	}
-
-	return fmt.Errorf("queue %s not found in any worker", queue)
 }
 
 // Stop stops all workers in the pool
-func (w *WorkflowWorker) Stop() {
+func (w *WorkerHandler) Stop() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	w.logger.Info("Stopping worker pool", map[string]interface{}{
-		"active_queues": w.activeQueues,
+	w.logger.Info("Initiating worker pool shutdown", map[string]interface{}{
+		"total_workers": len(w.flowPilotXWorkers),
 	})
 
-	for i, workerInstance := range w.workers {
+	for i, workerInstance := range w.flowPilotXWorkers {
 		if workerInstance != nil {
-			workerInstance.Stop()
-			w.workers[i] = nil
-			w.workerStatus[i].IsActive = false
-		}
-	}
-
-	w.activeQueues = make(map[string]bool)
-	w.workerQueues = make(map[int][]string)
-
-	w.logger.Info("Worker pool stopped successfully")
-}
-
-// GetWorkerStatus returns the status of all workers
-func (w *WorkflowWorker) GetWorkerStatus() []model.WorkerStatus {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
-	status := make([]model.WorkerStatus, len(w.workerStatus))
-	copy(status, w.workerStatus)
-	return status
-}
-
-// GetActiveQueues returns all active queues
-func (w *WorkflowWorker) GetActiveQueues() []string {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
-	queues := make([]string, 0, len(w.activeQueues))
-	for queue := range w.activeQueues {
-		queues = append(queues, queue)
-	}
-	return queues
-}
-
-// ExecuteActivity executes a single activity
-func (w *WorkflowWorker) ExecuteActivity(ctx context.Context, activityType string, input map[string]interface{}) (interface{}, error) {
-	w.logger.InfoWithCtx(ctx, "Executing activity", map[string]interface{}{
-		"activity_type": activityType,
-		"workflow_id":   input["workflow_id"],
-		"request_id":    input["request_id"],
-	})
-
-	result, err := w.activities.ExecuteActivity(ctx, input)
-	if err != nil {
-		w.logger.ErrorWithCtx(ctx, "Activity execution failed", map[string]interface{}{
-			"error":         err.Error(),
-			"activity_type": activityType,
-			"workflow_id":   input["workflow_id"],
-		})
-		return nil, fmt.Errorf("failed to execute activity: %v", err)
-	}
-
-	return result, nil
-}
-
-// ExecuteAsyncActivity adds a new ExecuteAsyncActivity method
-func (w *WorkflowWorker) ExecuteAsyncActivity(ctx context.Context, activityType string, input map[string]interface{}) error {
-	info := activity.GetInfo(ctx)
-	asyncToken := info.TaskToken
-
-	w.logger.InfoWithCtx(ctx, "Starting async activity execution", map[string]interface{}{
-		"activity_type": activityType,
-		"workflow_id":   input["workflow_id"],
-		"request_id":    input["request_id"],
-	})
-	// Start async processing
-	go func() {
-		asyncCtx := context.Background()
-
-		// Initialize progress tracking
-		progress := &model.ActivityProgress{
-			Status:     "running",
-			Percentage: 0,
-			StartTime:  time.Now(),
-			LastUpdate: time.Now(),
-		}
-
-		// Record initial heartbeat
-		w.temporalClient.RecordActivityHeartbeat(asyncCtx, asyncToken, progress)
-
-		// Execute the actual activity
-		result, err := w.activities.ExecuteActivity(asyncCtx, input)
-
-		if err != nil {
-			w.logger.ErrorWithCtx(asyncCtx, "Async activity execution failed", map[string]interface{}{
-				"error":         err.Error(),
-				"activity_type": activityType,
-				"workflow_id":   input["workflow_id"],
+			w.logger.Debug("Stopping worker", map[string]interface{}{
+				"worker_index": i,
+				"worker_id":    workerInstance.WorkerID,
+				"queue":        workerInstance.Queue,
 			})
-
-			// Complete activity with error
-			w.temporalClient.CompleteActivity(asyncCtx, asyncToken, nil, err)
-			return
+			workerInstance.stop()
 		}
+	}
 
-		// Update final progress
-		progress.Status = "completed"
-		progress.Percentage = 100
-		progress.CompletionTime = time.Now()
-		w.temporalClient.RecordActivityHeartbeat(asyncCtx, asyncToken, progress)
+	w.logger.Info("Worker pool shutdown completed", map[string]interface{}{
+		"stopped_workers": len(w.flowPilotXWorkers),
+	})
+}
 
-		// Complete activity with result
-		w.temporalClient.CompleteActivity(asyncCtx, asyncToken, result, nil)
+// Stop stops the worker safely
+func (w *FlowPilotXWorker) stop() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 
-		w.logger.InfoWithCtx(asyncCtx, "Async activity completed successfully", map[string]interface{}{
-			"activity_type": activityType,
-			"workflow_id":   input["workflow_id"],
-			"duration":      progress.CompletionTime.Sub(progress.StartTime).String(),
+	w.logger.Info("Initiating worker shutdown", map[string]interface{}{
+		"worker_id":     w.WorkerID,
+		"queue":         w.Queue,
+		"is_active":     w.IsActive,
+		"health_status": w.HealthStatus,
+	})
+
+	if w.worker != nil && w.IsActive {
+		defer func() {
+			if r := recover(); r != nil {
+				w.logger.Error("Worker stop panic recovered", map[string]interface{}{
+					"worker_id": w.WorkerID,
+					"queue":     w.Queue,
+					"panic":     r,
+				})
+			}
+		}()
+
+		w.worker.Stop()
+		w.IsActive = false
+		w.worker = nil
+
+		w.logger.Info("Worker stopped successfully", map[string]interface{}{
+			"worker_id": w.WorkerID,
+			"queue":     w.Queue,
 		})
-	}()
+	} else {
+		w.logger.Debug("Worker already stopped", map[string]interface{}{
+			"worker_id":  w.WorkerID,
+			"queue":      w.Queue,
+			"was_active": w.IsActive,
+		})
+	}
 
-	return activity.ErrResultPending
+	w.logger.Info("Worker shutdown process completed", map[string]interface{}{
+		"worker_id":    w.WorkerID,
+		"queue":        w.Queue,
+		"final_status": w.HealthStatus,
+	})
 }

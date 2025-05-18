@@ -1,169 +1,112 @@
 package workerhandler
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/flowpilotx/libs/worker/model"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-func (w *WorkflowWorker) DynamicWorkflow(ctx workflow.Context, input map[string]interface{}) (map[string]interface{}, error) {
-	w.logger.Info("Starting dynamic workflow", map[string]interface{}{
-		"input": input,
+func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model.Workflow) (*model.Workflow, error) {
+	if input == nil || input.WorkflowSchema == nil {
+		return nil, fmt.Errorf("invalid workflow input: workflow or schema is nil")
+	}
+	input.Status = "running"
+	now := time.Now()
+	input.CreatedAt = now
+	input.UpdatedAt = now
+	input.StartTime = &now
+	input.EndTime = nil
+	input.Duration = nil
+
+	w.logger.Info("Starting workflow with metadata", map[string]interface{}{
+		"workflow_id": input.WorkflowSchema.ID.Hex(),
+		"name":        input.WorkflowSchema.Name,
+		"category":    input.WorkflowSchema.Category,
+		"team":        input.WorkflowSchema.Team,
+		"priority":    input.WorkflowSchema.Priority,
+		"version":     input.WorkflowSchema.Version,
+		"parameters":  input.Parameters,
 	})
 
-	response := &model.WorkflowResponse{}
+	// Initialize schema resolver
+	resolver := NewSchemaResolver(w.logger)
+	results := make(map[string]*model.ActivityDefinition)
+	executed := make(map[string]bool)
 
-	// Validation logs
-	w.logger.Info("Validating workflow inputs", nil)
-	//print input
-	w.logger.Info("Input", map[string]interface{}{
-		"input": input,
-	})
-	// Extract input parameters with validation
-	workflowName, ok := input["name"].(string)
-	if !ok {
-		w.logger.Error("Invalid workflow name", map[string]interface{}{
-			"input":       input,
-			"actual_type": fmt.Sprintf("%T", input["name"]),
-		})
-		response.Status = "FAILED"
-		response.Error = "workflow_name is required"
-		result, err := w.structToMap(response, fmt.Errorf("workflow_name is required"))
-		return result, err
-	}
-	workflowID, ok := input["id"].(string)
-	if !ok {
-		w.logger.Error("Invalid workflow ID", map[string]interface{}{
-			"input":       input,
-			"actual_type": fmt.Sprintf("%T", input["id"]),
-		})
-		response.Status = "FAILED"
-		response.Error = "workflow_id is required"
-		result, err := w.structToMap(response, fmt.Errorf("workflow_id is required"))
-		return result, err
-	}
-
-	// Convert string to ObjectID
-	objectID, err := primitive.ObjectIDFromHex(workflowID)
-	if err != nil {
-		w.logger.Error("Invalid workflow ID format", map[string]interface{}{
-			"workflow_id": workflowID,
-			"error":       err.Error(),
-		})
-		response.Status = "FAILED"
-		response.Error = "invalid workflow_id format"
-		result, err := w.structToMap(response, fmt.Errorf("invalid workflow_id format: %v", err))
-		return result, err
-	}
-	response.ID = objectID
-
-	requestID, ok := input["request_id"].(string)
-	if !ok {
-		w.logger.Error("Invalid request ID", map[string]interface{}{
-			"input":       input,
-			"actual_type": fmt.Sprintf("%T", input["request_id"]),
-		})
-		response.Status = "FAILED"
-		response.Error = "request_id is required"
-		result, err := w.structToMap(response, fmt.Errorf("request_id is required"))
-		return result, err
-	}
-
-	// Convert string to ObjectID
-	requestObjectID, err := primitive.ObjectIDFromHex(requestID)
-	if err != nil {
-		w.logger.Error("Invalid request ID format", map[string]interface{}{
-			"request_id": requestID,
-			"error":      err.Error(),
-		})
-		response.Status = "FAILED"
-		response.Error = "invalid request_id format"
-		result, err := w.structToMap(response, fmt.Errorf("invalid request_id format: %v", err))
-		return result, err
-	}
-	response.RequestID = requestObjectID
-
-	var workflowDef *model.WorkflowSchema
-	err = w.mapToStruct(input, &workflowDef)
-	if err != nil {
-		w.logger.Error("Failed to unmarshal workflow input", map[string]interface{}{
-			"workflow_input": input,
-			"error":          err.Error(),
-		})
-		response.Status = "FAILED"
-		response.Error = fmt.Sprintf("failed to unmarshal workflow input: %v", err)
-		result, err := w.structToMap(response, fmt.Errorf("failed to unmarshal workflow input: %v", err))
-		return result, err
-	}
-	//print workflowDef
-	w.logger.Info("Workflow definition", map[string]interface{}{
-		"workflow_def": workflowDef,
-	})
-	results := make(map[string]interface{})
-	response.Activities = make([]model.ActivityResult, 0)
-	response.Status = "STARTED"
-	response.CreatedAt = workflow.Now(ctx)
-	response.UpdatedAt = workflow.Now(ctx)
-	response.Version = workflowDef.Version
-	response.DAG = workflowDef.DAG
-
-	// Activity execution logs
-	w.logger.Info("Starting activity processing", map[string]interface{}{
-		"total_activities": len(workflowDef.Activities),
-		"dag":              workflowDef.DAG,
+	// Add activity processing metadata log before the loop
+	w.logger.Info("Processing workflow activities", map[string]interface{}{
+		"total_activities": len(input.WorkflowSchema.Activities),
+		"workflow_id":      input.WorkflowSchema.ID.Hex(),
+		"dag":              input.WorkflowSchema.DAG,
 	})
 
-	// Process each activity based on DAG
-	for id, activity := range workflowDef.Activities {
-		activity.Workflow = workflowDef
-		w.logger.Info("Processing activity", map[string]interface{}{
-			"activity_id":   id,
+	// Process activities in DAG order
+	for _, activity := range input.WorkflowSchema.Activities {
+		activityID := activity.ID
+
+		// Add detailed activity start log
+		w.logger.Info("Starting activity processing", map[string]interface{}{
+			"activity_id":   activityID,
 			"activity_name": activity.Name,
 			"activity_type": activity.Type,
-			"is_async":      activity.Config != nil && activity.Config["async"] == true,
+			"is_optional":   activity.IsOptional,
+			"config":        activity.Config,
+			"workflow_id":   input.WorkflowSchema.ID.Hex(),
 		})
 
-		// Dependency check logs
-		if deps, ok := workflowDef.DAG[strconv.Itoa(id)]; ok && len(deps) > 0 {
-			w.logger.Info("Checking activity dependencies", map[string]interface{}{
-				"activity_id":  id,
-				"dependencies": deps,
-			})
+		// Validate activity configuration
+		if activity.Config == nil {
+			return nil, fmt.Errorf("activity %s has no configuration", activityID)
 		}
 
-		// Check dependencies
-		if deps, ok := workflowDef.DAG[strconv.Itoa(id)]; ok {
-			for _, dep := range deps {
-				if _, exists := results[dep]; !exists {
-					w.logger.Info("Waiting for dependency", map[string]interface{}{
-						"activity_id": id,
-						"dependency":  dep,
-					})
-					workflow.Sleep(ctx, time.Second)
-				}
-			}
+		if activity.Name == "" || activity.Type == "" {
+			return nil, fmt.Errorf("activity %s missing required fields: name or type", activityID)
 		}
-		activityInput, err := w.structToMap(activity, nil)
-		if err != nil {
-			w.logger.Error("Failed to convert activity to map", map[string]interface{}{
-				"error":    err.Error(),
-				"activity": activity,
-			})
-		}
+
+		now := time.Now()
+		activity.StartTime = &now
+		activity.EndTime = nil
+		activity.Duration = nil
+		activity.Attempt = 0
+		activity.Error = ""
+		activity.Status = "running"
+
+		// Add queue assignment log
+		w.logger.Info("Activity queue assignment", map[string]interface{}{
+			"activity_id":    activityID,
+			"queue":          activity.Queue,
+			"workflow_queue": input.WorkflowSchema.Queue,
+		})
+
 		// Configure activity options
 		activityOptions := workflow.ActivityOptions{
-			StartToCloseTimeout: 30 * time.Minute, // Default timeout
-			HeartbeatTimeout:    30 * time.Second, // For async activities
+			StartToCloseTimeout: activity.Config.Timeout.StartToClose,
+			HeartbeatTimeout:    activity.Config.Timeout.Heartbeat,
+			//TaskQueue:           activity.Queue,
 		}
 
-		// Add retry policy if configured
+		// Add activity options log
+		w.logger.Info("Configuring activity options", map[string]interface{}{
+			"activity_id":       activityID,
+			"timeout":           activity.Config.Timeout,
+			"retry_policy":      activity.Retry,
+			"start_to_close":    activity.Config.Timeout.StartToClose,
+			"heartbeat_timeout": activity.Config.Timeout.Heartbeat,
+		})
+
+		// Validate timeouts
+		if activityOptions.StartToCloseTimeout <= 0 {
+			return nil, fmt.Errorf("invalid start to close timeout for activity %s", activityID)
+		}
+
 		if activity.Retry != nil {
+			if activity.Retry.MaxAttempts <= 0 {
+				return nil, fmt.Errorf("invalid retry attempts for activity %s", activityID)
+			}
 			activityOptions.RetryPolicy = &temporal.RetryPolicy{
 				InitialInterval:    activity.Retry.InitialInterval,
 				BackoffCoefficient: activity.Retry.BackoffCoefficient,
@@ -172,193 +115,190 @@ func (w *WorkflowWorker) DynamicWorkflow(ctx workflow.Context, input map[string]
 			}
 		}
 
-		// Determine if activity is async
-		isAsync := activity.Config != nil && activity.Config["async"] == true
-
-		// Execute activity based on type
-		var result interface{}
 		activityCtx := workflow.WithActivityOptions(ctx, activityOptions)
-		now := workflow.Now(ctx)
-		if isAsync {
-			w.logger.Info("Executing async activity", map[string]interface{}{
-				"activity_id":   id,
-				"activity_name": activity.Name,
-				"retry_policy":  activity.Retry != nil,
-			})
-			// Execute async activity with progress monitoring
-			future := workflow.ExecuteActivity(activityCtx, w.ExecuteAsyncActivity, activity.Type, activityInput)
 
-			// Monitor progress while waiting for completion
-			for {
-				if future.IsReady() {
-					break
-				}
-
-				var progress ActivityProgress
-				if err := future.Get(ctx, &progress); err == nil {
-					w.logger.Info("Async activity progress", map[string]interface{}{
-						"activity_id":   id,
-						"activity_name": activity.Name,
-						"status":        progress.Status,
-						"percentage":    progress.Percentage,
-						"stage":         progress.CurrentStage,
-					})
-				}
-
-				workflow.Sleep(ctx, 3*time.Second)
-			}
-
-			// Get final result
-			if err := future.Get(ctx, &result); err != nil {
-				w.logger.Error("Async activity failed", map[string]interface{}{
-					"activity_id":   id,
-					"activity_name": activity.Name,
-					"error":         err.Error(),
-					"activity_type": activity.Type,
-				})
-				finalTime := workflow.Now(ctx)
-				activityResult := model.ActivityResult{}
-				activityResult.Error = err.Error()
-				activityResult.Result = nil
-				activityResult.StartedAt = &now
-				activityResult.CompletedAt = &finalTime
-				activityResult.Attempt = 1
-				response.Activities = append(response.Activities, activityResult)
-				response.Status = "FAILED"
-				result, err := w.structToMap(response, err)
-				return result, err
-			}
-		} else {
-			w.logger.Info("Executing sync activity", map[string]interface{}{
-				"activity_id":   id,
-				"activity_name": activity.Name,
-				"retry_policy":  activity.Retry != nil,
-			})
-			activityResult := model.ActivityResult{}
-			// Execute sync activity
-			err := workflow.ExecuteActivity(
-				activityCtx,
-				w.ExecuteActivity,
-				activity.Type,
-				activityInput,
-			).Get(ctx, &result)
-
-			if err != nil {
-				w.logger.Error("Sync activity failed", map[string]interface{}{
-					"activity_id":   id,
-					"activity_name": activity.Name,
-					"error":         err.Error(),
-					"activity_type": activity.Type,
-				})
-				finalTime := workflow.Now(ctx)
-				activityResult.Error = err.Error()
-				activityResult.Result = nil
-				activityResult.StartedAt = &now
-				activityResult.CompletedAt = &finalTime
-				activityResult.Attempt = 1
-				response.Activities = append(response.Activities, activityResult)
-				response.Status = "FAILED"
-				result, err := w.structToMap(response, err)
-				return result, err
-			}
-		}
-
-		// Save activity result
-		//workflow.ExecuteActivity(ctx, "SaveActivityResult", requestID, strconv.Itoa(id), result, nil)
-		results[strconv.Itoa(id)] = result
-
-		w.logger.Info("Activity completed successfully", map[string]interface{}{
-			"activity_id":    id,
-			"activity_name":  activity.Name,
-			"execution_time": time.Since(now),
-			"result_size":    len(fmt.Sprintf("%v", result)),
+		// Log activity context details
+		w.logger.Info("Activity context details", map[string]interface{}{
+			"activity_id": activityID,
+			"options": map[string]interface{}{
+				"task_queue":        activityOptions.TaskQueue,
+				"start_to_close":    activityOptions.StartToCloseTimeout.String(),
+				"heartbeat_timeout": activityOptions.HeartbeatTimeout.String(),
+				"retry_policy": map[string]interface{}{
+					"initial_interval":    activityOptions.RetryPolicy.InitialInterval.String(),
+					"backoff_coefficient": activityOptions.RetryPolicy.BackoffCoefficient,
+					"maximum_interval":    activityOptions.RetryPolicy.MaximumInterval.String(),
+					"maximum_attempts":    activityOptions.RetryPolicy.MaximumAttempts,
+				},
+			},
+			"workflow_id": input.WorkflowSchema.ID.Hex(),
 		})
-		finalTime := workflow.Now(ctx)
-		// For each activity completion, add to activityResults
-		activityResult := model.ActivityResult{
-			ActivityID:  strconv.Itoa(id),
-			Result:      results[strconv.Itoa(id)].(map[string]interface{}),
-			StartedAt:   &now,
-			CompletedAt: &finalTime,
-			Attempt:     1, // Set appropriate attempt count
-		}
-		response.Activities = append(response.Activities, activityResult)
-	}
-	response.Status = "COMPLETED"
-	// Update workflow request with final results
-	//workflow.ExecuteActivity(ctx, "UpdateWorkflowRequest", requestID, "COMPLETED", results, nil)
 
-	// Final workflow completion log
-	w.logger.Info("Dynamic workflow completed", map[string]interface{}{
-		"workflow_name":        workflowName,
-		"workflow_id":          workflowID,
-		"request_id":           requestID,
-		"total_activities":     len(workflowDef.Activities),
-		"completed_activities": len(response.Activities),
-		"status":               response.Status,
-		"has_error":            response.Error != "",
+		// Process dependencies
+		if deps, ok := input.WorkflowSchema.DAG[activityID]; ok && len(deps) > 0 {
+			for _, depID := range deps {
+				if !executed[depID] {
+					w.logger.Error("dependency %s not executed for activity %s", map[string]interface{}{
+						"dependency_id": depID,
+						"activity_id":   activityID,
+					})
+					return w.prepareWorkflowOutput(input, results), fmt.Errorf("dependency %s not executed for activity %s", depID, activityID)
+				}
+
+				depIdx, err := strconv.Atoi(depID)
+				if err != nil {
+					w.logger.Error("invalid dependency ID %s for activity %s: %w", map[string]interface{}{
+						"dependency_id": depID,
+						"activity_id":   activityID,
+						"error":         err.Error(),
+					})
+					return w.prepareWorkflowOutput(input, results), fmt.Errorf("invalid dependency ID %s for activity %s: %w", depID, activityID, err)
+				}
+
+				if depIdx >= len(input.WorkflowSchema.Activities) {
+					w.logger.Error("dependency index out of range for activity %s", map[string]interface{}{
+						"dependency_id": depID,
+						"activity_id":   activityID,
+					})
+					return w.prepareWorkflowOutput(input, results), fmt.Errorf("dependency index out of range for activity %s", activityID)
+				}
+
+				depActivity := input.WorkflowSchema.Activities[depIdx]
+				resolver.activities[depID] = &depActivity
+			}
+
+			resolvedInputs, err := resolver.ResolveInputSchema(&activity)
+			if err != nil {
+				w.logger.Error("failed to resolve input schema for activity %s: %w", map[string]interface{}{
+					"activity_id": activityID,
+					"error":       err.Error(),
+				})
+				return w.prepareWorkflowOutput(input, results), fmt.Errorf("failed to resolve input schema for activity %s: %w", activityID, err)
+			}
+			activity.InputSchema = resolvedInputs
+		}
+
+		var result model.ActivityDefinition
+
+		// Execute activity
+		if activity.Config.Async {
+			w.logger.Error("async activities are not supported yet", map[string]interface{}{
+				"activity_id": activityID,
+			})
+			return w.prepareWorkflowOutput(input, results), fmt.Errorf("async activities are not supported yet")
+		}
+		// Add pre-execution log
+		w.logger.Info("Preparing activity execution", map[string]interface{}{
+			"activity_id":     activityID,
+			"function_name":   activity.Name,
+			"input_schema":    activity.InputSchema,
+			"current_attempt": activity.Attempt,
+		})
+		w.logger.Info("Activity function name", map[string]interface{}{
+			"activity_id":   activityID,
+			"function_name": activity.Name,
+		})
+		err := workflow.ExecuteActivity(
+			activityCtx,
+			activity.Name,
+			activity,
+		).Get(ctx, &result)
+
+		if err != nil {
+			w.logger.Error("failed to execute activity %s: %w", map[string]interface{}{
+				"activity_id": activityID,
+				"error":       err.Error(),
+			})
+			return w.prepareWorkflowOutput(input, results), fmt.Errorf("failed to execute activity %s: %w", activityID, err)
+		}
+		now = time.Now()
+		result.EndTime = &now
+		duration := now.Sub(*result.StartTime)
+		result.Duration = &duration
+		result.Status = "completed"
+		result.Error = ""
+		results[activityID] = &result
+		executed[activityID] = true
+		activity = result
+		resolver.activities[activityID] = &activity
+
+		// Add detailed completion metrics
+		w.logger.Info("Activity execution metrics", map[string]interface{}{
+			"activity_id": activityID,
+			"start_time":  result.StartTime,
+			"end_time":    result.EndTime,
+			"duration":    result.Duration,
+			"status":      result.Status,
+			"attempt":     result.Attempt,
+		})
+
+		w.logger.Info("Activity completed", map[string]interface{}{
+			"activity_id": activityID,
+			"type":        activity.Type,
+			"name":        activity.Name,
+			"result":      result,
+		})
+	}
+
+	// Add final workflow metrics before completion
+	w.logger.Info("Workflow execution metrics", map[string]interface{}{
+		"workflow_id":          input.WorkflowSchema.ID.Hex(),
+		"total_duration":       input.Duration,
+		"activities_completed": len(results),
+		"start_time":           input.StartTime,
+		"end_time":             input.EndTime,
+		"status":               input.Status,
 	})
 
-	result, err := w.structToMap(response, nil)
-	if err != nil {
-		w.logger.Error("Failed to convert final response to map", map[string]interface{}{
-			"error":    err.Error(),
-			"response": fmt.Sprintf("%+v", response),
-		})
-	}
-	return result, err
+	return w.prepareWorkflowOutput(input, results), nil
 }
 
-// ActivityProgress struct for tracking async activity progress
-type ActivityProgress struct {
-	Status         string    `json:"status"`
-	Percentage     float64   `json:"percentage"`
-	StartTime      time.Time `json:"start_time"`
-	LastUpdate     time.Time `json:"last_update"`
-	CompletionTime time.Time `json:"completion_time,omitempty"`
-	CurrentStage   string    `json:"current_stage,omitempty"`
-	Message        string    `json:"message,omitempty"`
-	Error          string    `json:"error,omitempty"`
-}
+func (w *FlowPilotXWorker) prepareWorkflowOutput(input *model.Workflow, results map[string]*model.ActivityDefinition) *model.Workflow {
+	// Add preparation start log
+	w.logger.Info("Preparing workflow output", map[string]interface{}{
+		"workflow_id":    input.WorkflowSchema.ID.Hex(),
+		"num_results":    len(results),
+		"num_activities": len(input.WorkflowSchema.Activities),
+	})
 
-func (w *WorkflowWorker) structToMap(data interface{}, errInput error) (map[string]interface{}, error) {
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		w.logger.Error("Failed to marshal struct to JSON", map[string]interface{}{
-			"error": err.Error(),
-			"data":  fmt.Sprintf("%+v", data),
-		})
-		return nil, fmt.Errorf("failed to marshal struct to JSON: %v", err)
-	}
-	var result map[string]interface{}
-	err = json.Unmarshal(jsonBytes, &result)
-	if err != nil {
-		w.logger.Error("Failed to unmarshal JSON to map", map[string]interface{}{
-			"error": err.Error(),
-			"json":  string(jsonBytes),
-		})
-	}
-	return result, errInput
-}
+	// Update workflow status and timing
+	now := time.Now()
+	input.Status = "completed"
+	input.EndTime = &now
+	input.UpdatedAt = now
+	duration := now.Sub(input.CreatedAt)
+	input.Duration = &duration
 
-// Convert map to struct using JSON as intermediate
-func (w *WorkflowWorker) mapToStruct(data map[string]interface{}, result interface{}) error {
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		w.logger.Error("Failed to marshal map to JSON", map[string]interface{}{
-			"error": err.Error(),
-			"data":  fmt.Sprintf("%+v", data),
-		})
-		return fmt.Errorf("failed to marshal map to JSON: %v", err)
+	// Create activities map for easier lookup
+	activitiesMap := make(map[string]*model.ActivityDefinition)
+	for _, activity := range input.WorkflowSchema.Activities {
+		id := activity.ID
+		activitiesMap[id] = &activity
 	}
 
-	if err := json.Unmarshal(jsonBytes, result); err != nil {
-		w.logger.Error("Failed to unmarshal JSON to struct", map[string]interface{}{
-			"error": err.Error(),
-			"json":  string(jsonBytes),
-		})
-		return fmt.Errorf("failed to unmarshal JSON to struct: %v", err)
+	// Update activities with their results
+	for id, result := range results {
+		if activity, exists := activitiesMap[id]; exists {
+			*activity = *result
+		} else {
+			w.logger.Error("Activity not found", map[string]interface{}{
+				"activity_id": id,
+			})
+		}
 	}
 
-	return nil
+	// Add activity results summary
+	w.logger.Info("Activity results summary", map[string]interface{}{
+		"workflow_id":    input.WorkflowSchema.ID.Hex(),
+		"results_map":    results,
+		"activities_map": activitiesMap,
+	})
+
+	w.logger.Info("Workflow completed", map[string]interface{}{
+		"workflow_id": input.WorkflowSchema.ID.Hex(),
+		"duration":    duration.String(),
+		"activities":  len(results),
+	})
+
+	return input
 }

@@ -19,13 +19,13 @@ const (
 
 var (
 	// Command-line flags
-	serverAddrs = flag.String("servers", "", "Comma-separated list of server addresses (host:port)")
-	mode       = flag.String("mode", "sync", "Execution mode: sync, async, or stream")
-	message    = flag.String("message", "Hello Worker!", "Message to send")
-	count      = flag.Int("count", 1, "Number of messages to send in stream mode")
-	timeout    = flag.Duration("timeout", 30*time.Second, "Operation timeout")
+	serverAddrs      = flag.String("servers", "", "Comma-separated list of server addresses (host:port)")
+	mode             = flag.String("mode", "sync", "Execution mode: sync, async, or stream")
+	message          = flag.String("message", "Hello Worker!", "Message to send")
+	count            = flag.Int("count", 1, "Number of messages to send in stream mode")
+	timeout          = flag.Duration("timeout", 30*time.Second, "Operation timeout")
 	useLoadBalancing = flag.Bool("lb", false, "Enable load balancing")
-	healthCheck = flag.Bool("health", true, "Enable health checking")
+	healthCheck      = flag.Bool("health", true, "Enable health checking")
 )
 
 func main() {
@@ -93,7 +93,7 @@ func main() {
 
 func executeSyncRequest(ctx context.Context, client *client.WorkerClient) {
 	log.Println("Executing synchronous request...")
-	
+
 	resp, err := client.Execute(ctx, []byte(*message))
 	if err != nil {
 		log.Fatalf("Sync execution failed: %v", err)
@@ -104,7 +104,7 @@ func executeSyncRequest(ctx context.Context, client *client.WorkerClient) {
 
 func executeAsyncRequest(ctx context.Context, client *client.WorkerClient) {
 	log.Println("Executing asynchronous request...")
-	
+
 	resp, err := client.ExecuteAsync(ctx, []byte(*message))
 	if err != nil {
 		log.Fatalf("Async execution failed: %v", err)
@@ -121,7 +121,7 @@ func executeAsyncRequest(ctx context.Context, client *client.WorkerClient) {
 
 func executeStreamRequest(ctx context.Context, client *client.WorkerClient) {
 	log.Println("Executing streaming request...")
-	
+
 	stream, err := client.StreamExecute(ctx)
 	if err != nil {
 		log.Fatalf("Failed to start stream: %v", err)
@@ -137,4 +137,4 @@ func executeStreamRequest(ctx context.Context, client *client.WorkerClient) {
 	if err := client.SendStreamMessages(stream, messages, time.Second); err != nil {
 		log.Fatalf("Failed to send stream messages: %v", err)
 	}
-} 
+}

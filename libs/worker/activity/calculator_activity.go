@@ -1,31 +1,33 @@
-package activities
+package activity
 
 import (
 	"fmt"
+
+	workerModel "github.com/flowpilotx/libs/worker/model"
 )
 
-func (a *Activities) ExecuteAdd(input map[string]interface{}) (map[string]interface{}, error) {
+func (a *Activity) Add(activity *workerModel.ActivityDefinition) (*workerModel.ActivityDefinition, error) {
 	a.Logger.Info("Executing add activity", map[string]interface{}{
-		"input": input,
+		"input": activity,
 	})
 
-	x, ok := input["a"].(float64)
+	x, ok := activity.InputSchema["a"].(float64)
 	if !ok {
 		err := fmt.Errorf("invalid input: a must be a number")
 		a.Logger.Error("Invalid input for add activity", map[string]interface{}{
 			"error": err.Error(),
-			"input": input,
+			"input": activity,
 		})
-		return map[string]interface{}{}, err
+		return activity, err
 	}
-	y, ok := input["b"].(float64)
+	y, ok := activity.InputSchema["b"].(float64)
 	if !ok {
 		err := fmt.Errorf("invalid input: b must be a number")
 		a.Logger.Error("Invalid input for add activity", map[string]interface{}{
 			"error": err.Error(),
-			"input": input,
+			"input": activity,
 		})
-		return map[string]interface{}{}, err
+		return activity, err
 	}
 
 	result := x + y
@@ -34,35 +36,36 @@ func (a *Activities) ExecuteAdd(input map[string]interface{}) (map[string]interf
 		"b":      y,
 		"result": result,
 	})
-	return map[string]interface{}{
+	activity.OutputSchema = map[string]interface{}{
 		"a":      x,
 		"b":      y,
 		"result": result,
-	}, nil
+	}
+	return activity, nil
 }
 
-func (a *Activities) ExecuteMultiply(input map[string]interface{}) (map[string]interface{}, error) {
+func (a *Activity) Multiply(activity *workerModel.ActivityDefinition) (*workerModel.ActivityDefinition, error) {
 	a.Logger.Info("Executing multiply activity", map[string]interface{}{
-		"input": input,
+		"input": activity,
 	})
 
-	x, ok := input["a"].(float64)
+	x, ok := activity.InputSchema["a"].(float64)
 	if !ok {
 		err := fmt.Errorf("invalid input: a must be a number")
 		a.Logger.Error("Invalid input for multiply activity", map[string]interface{}{
 			"error": err.Error(),
-			"input": input,
+			"input": activity,
 		})
-		return map[string]interface{}{}, err
+		return activity, err
 	}
-	y, ok := input["b"].(float64)
+	y, ok := activity.InputSchema["b"].(float64)
 	if !ok {
 		err := fmt.Errorf("invalid input: b must be a number")
 		a.Logger.Error("Invalid input for multiply activity", map[string]interface{}{
 			"error": err.Error(),
-			"input": input,
+			"input": activity,
 		})
-		return map[string]interface{}{}, err
+		return activity, err
 	}
 
 	result := x * y
@@ -71,9 +74,10 @@ func (a *Activities) ExecuteMultiply(input map[string]interface{}) (map[string]i
 		"b":      y,
 		"result": result,
 	})
-	return map[string]interface{}{
+	activity.OutputSchema = map[string]interface{}{
 		"a":      x,
 		"b":      y,
 		"result": result,
-	}, nil
+	}
+	return activity, nil
 }

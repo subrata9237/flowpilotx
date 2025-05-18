@@ -95,14 +95,55 @@ flowpilotx_worker:
     max_connection_idle: "180s"
   
   worker:
-    num_workers: 5
-    max_queues_per_worker: 10
-    initial_queues:
-      - "flowpilotx-default-queue"
-      - "flowpilotx-high-priority-queue"
-      - "flowpilotx-low-priority-queue"
-      - "flowpilotx-workflow-queue"
-    heartbeat_interval: 30
+    # Workflow queues configuration
+    # These queues are used for workflow task processing
+    workflow_queues:
+      # Default queue for standard workflow processing
+      - queue_name: "flowpilotx-default-queue"
+        max_concurrent_activity_execution_size: 100  # Maximum number of concurrent activities
+        max_concurrent_workflow_execution_size: 50   # Maximum number of concurrent workflows
+        worker_activities_per_second: 100           # Rate limit for worker activities
+        task_queue_activities_per_second: 100       # Rate limit for task queue
+        weight: 1                                   # Queue weight for load balancing
+
+      # High priority queue for urgent workflows
+      - queue_name: "flowpilotx-high-priority-queue"
+        max_concurrent_activity_execution_size: 200  # Higher concurrency for priority tasks
+        max_concurrent_workflow_execution_size: 100  # Double the default workflow capacity
+        worker_activities_per_second: 200           # Higher throughput for priority tasks
+        task_queue_activities_per_second: 200       # Higher queue processing rate
+        weight: 2                                   # Higher weight for priority routing
+
+      # Low priority queue for background workflows
+      - queue_name: "flowpilotx-low-priority-queue"
+        max_concurrent_activity_execution_size: 50   # Lower concurrency for background tasks
+        max_concurrent_workflow_execution_size: 25   # Half the default workflow capacity
+        worker_activities_per_second: 50            # Lower throughput for background tasks
+        task_queue_activities_per_second: 50        # Lower queue processing rate
+        weight: 1                                   # Standard weight for background tasks
+
+    # Activity queues configuration
+    # These queues are dedicated to specific activity types
+    activity_queues:
+      # Queue for addition operations
+      
+    # Worker heartbeat configuration
+    heartbeat_interval: 30  # Interval in seconds for worker health checks
+    
+    # Queue management strategy configuration
+    queue_balancing_strategy: "least_loaded"  # Strategy for distributing work across queues
+                                            # Options: least_loaded, round_robin, weighted
+    worker_startup_delay: "5s"              # Delay between starting each worker
+    graceful_shutdown_time: "30s"           # Time allowed for graceful shutdown
+    queue_rebalance_interval: "5m"          # How often to rebalance queues
+    
+    # Health check configuration for worker monitoring
+    health_check:
+      enabled: true                         # Enable/disable health checks
+      interval: "30s"                       # How often to perform health checks
+      timeout: "5s"                         # Maximum time for health check
+      failure_threshold: 3                  # Number of failures before marking unhealthy
+      success_threshold: 1                  # Number of successes before marking healthy
 
 # Shared MongoDB configuration
 mongodb:
@@ -180,14 +221,14 @@ flowpilotx_activities:
   activities:
     - name: "Add"
       type: "calculator"
-      queue: "flowpilotx-default-queue"
+      queue: "flowpilotx-add-queue"
       retry_count: 3
       timeout_seconds: 30
       description: "Add two numbers"
       
     - name: "Multiply"
       type: "calculator"
-      queue: "flowpilotx-default-queue"
+      queue: "flowpilotx-multiply-queue"
       retry_count: 3
       timeout_seconds: 30
       description: "Multiply two numbers"

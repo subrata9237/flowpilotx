@@ -20,8 +20,8 @@ type WorkflowService interface {
 	CreateWorkflow(ctx context.Context, workflow *model.WorkflowSchema) error
 	GetWorkflow(ctx context.Context, id string) (*model.WorkflowSchema, error)
 	TriggerWorkflow(ctx context.Context, workflowID string, input map[string]interface{}) (string, error)
-	GetWorkflowRequest(ctx context.Context, requestID string) (*model.WorkflowRequest, error)
-	GetActivityResults(ctx context.Context, requestID string) ([]*model.ActivityResult, error)
+	GetWorkflowRequest(ctx context.Context, requestID string) (*model.Workflow, error)
+	GetActivityResults(ctx context.Context, requestID string) ([]*model.ActivityDefinition, error)
 }
 
 type workflowService struct {
@@ -45,6 +45,7 @@ func (s *workflowService) CreateWorkflow(ctx context.Context, workflow *model.Wo
 	workflow.UpdatedAt = workflow.CreatedAt
 	workflow.Status = "ACTIVE"
 	workflow.Version = 1
+	workflow.Queue = s.getTaskQueue(workflow)
 
 	result, err := s.mongoClient.InsertOne(ctx, "workflows", workflow)
 	if err != nil {
@@ -87,57 +88,64 @@ func (s *workflowService) TriggerWorkflow(ctx context.Context, workflowID string
 	if workflow.Name == "" {
 		return "", fmt.Errorf("workflow name cannot be empty")
 	}
-	workflowInput, err := structToMap(workflow)
-	if err != nil {
-		return "", fmt.Errorf("failed to convert workflow input to map: %v", err)
-	}
-	request := &model.WorkflowRequest{
-		WorkflowID: workflow.ID,
-		Input:      workflowInput,
-		Status:     "PENDING",
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+	request := &model.Workflow{
+		WorkflowSchema: workflow,
+		Parameters:     input,
+		Status:         "PENDING",
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
-	result, err := s.mongoClient.InsertOne(ctx, "workflow_requests", request)
+	result, err := s.mongoClient.InsertOne(ctx, "workflows", request)
 	if err != nil {
 		return "", fmt.Errorf("failed to create workflow request: %v", err)
 	}
 
-	request.ID = result.InsertedID.(primitive.ObjectID)
-	workflowInput["request_id"] = request.ID.Hex()
+	request.RequestID = result.InsertedID.(primitive.ObjectID)
 	// Get task queue based on workflow name and ID
-	taskQueue := s.getTaskQueue(workflow)
-
+	if request.WorkflowSchema.Queue == "" {
+		return "", fmt.Errorf("workflow queue cannot be empty")
+	}
 	options := client.StartWorkflowOptions{
 		ID:                    workflowID,
-		TaskQueue:             taskQueue,
+		TaskQueue:             request.WorkflowSchema.Queue,
 		WorkflowIDReusePolicy: enums.WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE,
+		/*SearchAttributes: map[string]interface{}{
+			"WorkflowType": workflow.Name,
+			"Environment":  s.config.Environment,
+			"Region":       s.config.Region,
+			"Category":     workflow.Category,
+			"Team":         workflow.Team,
+			"Priority":     workflow.Priority,
+			"Version":      workflow.Version,
+			"RequestID":    request.RequestID.Hex(),
+			"WorkflowID":   workflowID,
+			"WorkflowName": workflow.Name,
+		}*/
 	}
-
-	// Use workflow.Name for the workflow type
-	_, err = s.temporalClient.ExecuteWorkflow(ctx, options, workflow.Name, workflowInput)
+	workflowNameGeneric := "FlowpilotxWorkflow"
+	_, err = s.temporalClient.ExecuteWorkflow(ctx, options, workflowNameGeneric, request)
 	if err != nil {
 		// Log the error with workflow name for better debugging
 		s.logger.ErrorWithCtx(ctx, "Failed to start workflow", map[string]interface{}{
 			"error":         err.Error(),
 			"workflow_name": workflow.Name,
 			"workflow_id":   workflowID,
-			"request_id":    request.ID.Hex(),
+			"request_id":    request.RequestID.Hex(),
 		})
 		return "", fmt.Errorf("failed to start workflow %s: %v", workflow.Name, err)
 	}
 
-	return request.ID.Hex(), nil
+	return request.RequestID.Hex(), nil
 }
 
-func (s *workflowService) GetWorkflowRequest(ctx context.Context, requestID string) (*model.WorkflowRequest, error) {
+func (s *workflowService) GetWorkflowRequest(ctx context.Context, requestID string) (*model.Workflow, error) {
 	objectID, err := primitive.ObjectIDFromHex(requestID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid request ID: %v", err)
 	}
 
-	var request model.WorkflowRequest
+	var request model.Workflow
 	err = s.mongoClient.FindOne(ctx, "workflow_requests", bson.M{"_id": objectID}, &request)
 	if err != nil {
 		if err == mongodb.ErrNoDocuments {
@@ -149,7 +157,7 @@ func (s *workflowService) GetWorkflowRequest(ctx context.Context, requestID stri
 	return &request, nil
 }
 
-func (s *workflowService) GetActivityResults(ctx context.Context, requestID string) ([]*model.ActivityResult, error) {
+func (s *workflowService) GetActivityResults(ctx context.Context, requestID string) ([]*model.ActivityDefinition, error) {
 	objectID, err := primitive.ObjectIDFromHex(requestID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid request ID: %v", err)
@@ -161,7 +169,7 @@ func (s *workflowService) GetActivityResults(ctx context.Context, requestID stri
 	}
 	defer cursor.Close(ctx)
 
-	var results []*model.ActivityResult
+	var results []*model.ActivityDefinition
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, fmt.Errorf("failed to decode activity results: %v", err)
 	}

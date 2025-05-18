@@ -13,9 +13,9 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/flowpilotx/libs/config"
 	pb "github.com/flowpilotx/libs/grpc-common/pkg/api/worker/v1"
 	"github.com/flowpilotx/libs/logger"
-	"github.com/flowpilotx/libs/config"
 	"github.com/flowpilotx/services/flowpilotx-worker/internal/metrics"
 	"github.com/flowpilotx/services/flowpilotx-worker/internal/service"
 )
@@ -73,13 +73,13 @@ func main() {
 	serverOpts := []grpc.ServerOption{
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle: cfg.Server.MaxConnectionIdle,
-			Time:             cfg.Server.KeepAliveTime,
-			Timeout:          cfg.Server.KeepAliveTimeout,
+			Time:              cfg.Server.KeepAliveTime,
+			Timeout:           cfg.Server.KeepAliveTimeout,
 		}),
 	}
 
 	grpcServer := grpc.NewServer(serverOpts...)
-	
+
 	// Create worker service with the same logger instance
 	workerService := service.NewWorkerService(cfg, log, m)
 	pb.RegisterWorkerServiceServer(grpcServer, workerService)
@@ -149,4 +149,4 @@ func main() {
 			"shutdown_duration": time.Since(time.Now()).String(),
 		})
 	}
-} 
+}

@@ -70,10 +70,35 @@ type RateLimitConfig struct {
 
 // WorkerConfig holds worker-specific configuration
 type WorkerConfig struct {
-	NumWorkers         int      `mapstructure:"num_workers" yaml:"num_workers" env:"NUM_WORKERS"`
-	MaxQueuesPerWorker int      `mapstructure:"max_queues_per_worker" yaml:"max_queues_per_worker" env:"MAX_QUEUES_PER_WORKER"`
-	InitialQueues      []string `mapstructure:"initial_queues" yaml:"initial_queues" env:"INITIAL_QUEUES"`
-	HeartbeatInterval  int      `mapstructure:"heartbeat_interval" yaml:"heartbeat_interval" env:"HEARTBEAT_INTERVAL"`
+	WorkflowQueues    []QueueConfig `mapstructure:"workflow_queues" yaml:"workflow_queues" json:"workflow_queues"`
+	ActivityQueues    []QueueConfig `mapstructure:"activity_queues" yaml:"activity_queues" json:"activity_queues"`
+	HeartbeatInterval int           `mapstructure:"heartbeat_interval" yaml:"heartbeat_interval" json:"heartbeat_interval"`
+
+	// Strategy configuration
+	QueueBalancingStrategy string            `mapstructure:"queue_balancing_strategy" yaml:"queue_balancing_strategy" json:"queue_balancing_strategy"` // "least_loaded", "round_robin", "weighted"
+	WorkerStartupDelay     time.Duration     `mapstructure:"worker_startup_delay" yaml:"worker_startup_delay" json:"worker_startup_delay"`             // Delay between starting workers
+	GracefulShutdownTime   time.Duration     `mapstructure:"graceful_shutdown_time" yaml:"graceful_shutdown_time" json:"graceful_shutdown_time"`       // Time to wait for graceful shutdown
+	QueueRebalanceInterval time.Duration     `mapstructure:"queue_rebalance_interval" yaml:"queue_rebalance_interval" json:"queue_rebalance_interval"` // Interval for queue rebalancing
+	HealthCheck            HealthCheckConfig `mapstructure:"health_check" yaml:"health_check" json:"health_check"`
+}
+
+// QueueConfig holds queue-specific configuration
+type QueueConfig struct {
+	QueueName                          string `mapstructure:"queue_name" yaml:"queue_name" json:"queue_name"`
+	MaxConcurrentActivityExecutionSize int    `mapstructure:"max_concurrent_activity_execution_size" yaml:"max_concurrent_activity_execution_size" json:"max_concurrent_activity_execution_size"`
+	MaxConcurrentWorkflowExecutionSize int    `mapstructure:"max_concurrent_workflow_execution_size" yaml:"max_concurrent_workflow_execution_size" json:"max_concurrent_workflow_execution_size"`
+	WorkerActivitiesPerSecond          int    `mapstructure:"worker_activities_per_second" yaml:"worker_activities_per_second" json:"worker_activities_per_second"`
+	TaskQueueActivitiesPerSecond       int    `mapstructure:"task_queue_activities_per_second" yaml:"task_queue_activities_per_second" json:"task_queue_activities_per_second"`
+	Weight                             int    `mapstructure:"weight" yaml:"weight" json:"weight"`
+}
+
+// HealthCheckConfig holds health check configuration
+type HealthCheckConfig struct {
+	Enabled          bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Interval         time.Duration `mapstructure:"interval" yaml:"interval" json:"interval"`
+	Timeout          time.Duration `mapstructure:"timeout" yaml:"timeout" json:"timeout"`
+	FailureThreshold int           `mapstructure:"failure_threshold" yaml:"failure_threshold" json:"failure_threshold"`
+	SuccessThreshold int           `mapstructure:"success_threshold" yaml:"success_threshold" json:"success_threshold"`
 }
 
 // RetryConfig holds retry-related configuration

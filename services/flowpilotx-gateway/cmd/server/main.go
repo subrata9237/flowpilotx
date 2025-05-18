@@ -12,7 +12,6 @@ import (
 	"github.com/flowpilotx/libs/config"
 	"github.com/flowpilotx/libs/logger"
 	"github.com/flowpilotx/libs/mongodb"
-	"github.com/flowpilotx/libs/worker/model"
 	"github.com/flowpilotx/libs/worker/workerhandler"
 	_ "github.com/flowpilotx/services/flowpilotx-gateway/docs" // swagger docs
 	"github.com/flowpilotx/services/flowpilotx-gateway/internal/routes"
@@ -98,14 +97,9 @@ func main() {
 	log.Info("Temporal client initialized", map[string]interface{}{
 		"namespace": cfg.FlowpilotxGateway.Temporal.Namespace,
 	})
-	workflowConfig := &model.WorkerConfig{
-		NumWorkers:         cfg.FlowpilotxWorker.Worker.NumWorkers,
-		MaxQueuesPerWorker: cfg.FlowpilotxWorker.Worker.MaxQueuesPerWorker,
-		InitialQueues:      cfg.FlowpilotxWorker.Worker.InitialQueues,
-		HeartbeatInterval:  cfg.FlowpilotxWorker.Worker.HeartbeatInterval,
-	}
+
 	// Initialize workflow worker
-	workflowWorker := workerhandler.NewWorkflowWorker(temporalClient, mongoClient, log, workflowConfig)
+	workflowWorker := workerhandler.NewWorkerHandler(temporalClient, mongoClient, log, &cfg.FlowpilotxWorker.Worker)
 
 	// Start workflow worker in a goroutine
 	workerCtx, workerCancel := context.WithCancel(context.Background())
