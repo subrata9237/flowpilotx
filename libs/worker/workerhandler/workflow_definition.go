@@ -22,7 +22,6 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 	input.UpdatedAt = now
 	input.StartTime = &now
 	input.EndTime = nil
-	input.Duration = nil
 
 	w.logger.Info("Starting workflow with metadata", map[string]interface{}{
 		"workflow_id": input.WorkflowSchema.ID.Hex(),
@@ -92,7 +91,6 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 		now := time.Now()
 		activity.StartTime = &now
 		activity.EndTime = nil
-		activity.Duration = nil
 		activity.Attempt = 0
 		activity.Error = ""
 		activity.Status = "running"
@@ -189,10 +187,10 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 				}
 
 				depActivity := input.WorkflowSchema.Activities[depIdx]
-				resolver.activities[depID] = &depActivity
+				resolver.activities[depID] = depActivity
 			}
 
-			resolvedInputs, err := resolver.ResolveInputSchema(&activity)
+			resolvedInputs, err := resolver.ResolveInputSchema(activity)
 			if err != nil {
 				w.logger.Error("Failed to resolve input schema", map[string]interface{}{
 					"activity_id": activityID,
@@ -234,15 +232,9 @@ func (w *FlowPilotXWorker) FlowpilotxWorkflow(ctx workflow.Context, input *model
 			})
 			return w.prepareWorkflowOutput(input, results), fmt.Errorf("failed to execute activity %s: %w", activityID, err)
 		}
-		now = time.Now()
-		activity.EndTime = &now
-		duration := now.Sub(*activity.StartTime)
-		activity.Duration = &duration
-		activity.Status = "completed"
-		activity.Error = ""
-		results[activityID] = &activity
+		results[activityID] = activity
 		executed[activityID] = true
-		resolver.activities[activityID] = &activity
+		resolver.activities[activityID] = activity
 
 		// Add detailed completion metrics
 		w.logger.Info("Activity execution metrics", map[string]interface{}{
@@ -289,13 +281,13 @@ func (w *FlowPilotXWorker) prepareWorkflowOutput(input *model.Workflow, results 
 	input.EndTime = &now
 	input.UpdatedAt = now
 	duration := now.Sub(input.CreatedAt)
-	input.Duration = &duration
+	input.Duration = duration.String()
 
 	// Create activities map for easier lookup
 	activitiesMap := make(map[string]*model.ActivityDefinition)
 	for _, activity := range input.WorkflowSchema.Activities {
 		id := activity.ID
-		activitiesMap[id] = &activity
+		activitiesMap[id] = activity
 	}
 
 	// Update activities with their results

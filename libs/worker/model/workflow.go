@@ -7,21 +7,21 @@ import (
 )
 
 type WorkflowSchema struct {
-	ID               primitive.ObjectID   `bson:"_id,omitempty" json:"id"`
-	Queue            string               `bson:"queue" json:"queue"`
-	Name             string               `bson:"name" json:"name"`
-	Category         string               `bson:"category" json:"category"`
-	Team             string               `bson:"team" json:"team"`
-	Priority         string               `bson:"priority" json:"priority"`
-	Type             string               `bson:"type" json:"type"`
-	Description      string               `bson:"description" json:"description"`
-	Activities       []ActivityDefinition `bson:"activities" json:"activities"`
-	ActivityMapIndex map[string]int       `bson:"activity_map_index,omitempty" json:"activity_map_index,omitempty"`
-	DAG              map[string][]string  `bson:"dag" json:"dag"`
-	CreatedAt        time.Time            `bson:"created_at" json:"created_at"`
-	UpdatedAt        time.Time            `bson:"updated_at" json:"updated_at"`
-	Status           string               `bson:"status" json:"status"`
-	Version          int                  `bson:"version" json:"version"`
+	ID               primitive.ObjectID    `bson:"_id,omitempty" json:"id"`
+	Queue            string                `bson:"queue" json:"queue"`
+	Name             string                `bson:"name" json:"name"`
+	Category         string                `bson:"category" json:"category"`
+	Team             string                `bson:"team" json:"team"`
+	Priority         string                `bson:"priority" json:"priority"`
+	Type             string                `bson:"type" json:"type"`
+	Description      string                `bson:"description" json:"description"`
+	Activities       []*ActivityDefinition `bson:"activities" json:"activities"`
+	ActivityMapIndex map[string]int        `bson:"activity_map_index,omitempty" json:"activity_map_index,omitempty"`
+	DAG              map[string][]string   `bson:"dag" json:"dag"`
+	CreatedAt        time.Time             `bson:"created_at" json:"created_at"`
+	UpdatedAt        time.Time             `bson:"updated_at" json:"updated_at"`
+	Status           string                `bson:"status" json:"status"`
+	Version          int                   `bson:"version" json:"version"`
 }
 
 type ActivityDefinition struct {
@@ -39,7 +39,7 @@ type ActivityDefinition struct {
 	WorkflowName      string                 `bson:"workflow_name,omitempty" json:"workflow_name,omitempty"`
 	StartTime         *time.Time             `json:"start_time,omitempty" bson:"start_time,omitempty"`
 	EndTime           *time.Time             `json:"end_time,omitempty" bson:"end_time,omitempty"`
-	Duration          *time.Duration         `json:"duration,omitempty" bson:"duration,omitempty"`
+	Duration          string                 `json:"duration,omitempty" bson:"duration,omitempty"`
 	Attempt           int                    `json:"attempt" bson:"attempt"`
 	Error             string                 `json:"error,omitempty" bson:"error,omitempty"`
 	Status            string                 `json:"status" bson:"status"`
@@ -70,11 +70,11 @@ type Workflow struct {
 	//Workflow status meas wheasther workflwo succesfully compleyted or not
 	Status string `json:"status" bson:"status"`
 	// Timestamps
-	CreatedAt time.Time      `json:"created_at" bson:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at" bson:"updated_at"`
-	StartTime *time.Time     `json:"start_time,omitempty" bson:"start_time,omitempty"`
-	EndTime   *time.Time     `json:"end_time,omitempty" bson:"end_time,omitempty"`
-	Duration  *time.Duration `json:"duration,omitempty" bson:"duration,omitempty"`
+	CreatedAt time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at" bson:"updated_at"`
+	StartTime *time.Time `json:"start_time,omitempty" bson:"start_time,omitempty"`
+	EndTime   *time.Time `json:"end_time,omitempty" bson:"end_time,omitempty"`
+	Duration  string     `json:"duration,omitempty" bson:"duration,omitempty"`
 	// Custom input parameters
 	Parameters map[string]interface{} `json:"parameters" bson:"parameters"`
 }
@@ -84,6 +84,7 @@ type Reference struct {
 	Ref string `json:"$ref"`
 }
 type TimeoutDuration string
+type Duration time.Duration
 
 func (t TimeoutDuration) ToDuration() time.Duration {
 	duration, err := time.ParseDuration(string(t))

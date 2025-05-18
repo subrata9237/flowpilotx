@@ -10,6 +10,8 @@ func (a *Activity) Add(activity *workerModel.ActivityDefinition) (*workerModel.A
 	a.Logger.Info("Executing add activity", map[string]interface{}{
 		"input": activity,
 	})
+	var err error
+	defer a.prepareFinalActivity(activity, err)
 
 	x, ok := activity.InputSchema["a"].(float64)
 	if !ok {
@@ -44,17 +46,18 @@ func (a *Activity) Add(activity *workerModel.ActivityDefinition) (*workerModel.A
 		"result": result,
 	})
 
-	return activity, nil
+	return activity, err
 }
 
 func (a *Activity) Multiply(activity *workerModel.ActivityDefinition) (*workerModel.ActivityDefinition, error) {
 	a.Logger.Info("Executing multiply activity", map[string]interface{}{
 		"input": activity,
 	})
-
+	var err error
+	defer a.prepareFinalActivity(activity, err)
 	x, ok := activity.InputSchema["a"].(float64)
 	if !ok {
-		err := fmt.Errorf("invalid input: a must be a number")
+		err = fmt.Errorf("invalid input: a must be a number")
 		a.Logger.Error("Invalid input for multiply activity", map[string]interface{}{
 			"error": err.Error(),
 			"input": activity,
@@ -63,7 +66,7 @@ func (a *Activity) Multiply(activity *workerModel.ActivityDefinition) (*workerMo
 	}
 	y, ok := activity.InputSchema["b"].(float64)
 	if !ok {
-		err := fmt.Errorf("invalid input: b must be a number")
+		err = fmt.Errorf("invalid input: b must be a number")
 		a.Logger.Error("Invalid input for multiply activity", map[string]interface{}{
 			"error": err.Error(),
 			"input": activity,
@@ -82,5 +85,5 @@ func (a *Activity) Multiply(activity *workerModel.ActivityDefinition) (*workerMo
 		"b":      y,
 		"result": result,
 	}
-	return activity, nil
+	return activity, err
 }
