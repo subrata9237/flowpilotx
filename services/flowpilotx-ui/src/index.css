@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .node-handle {
+    @apply w-2.5 h-2.5 bg-gray-500 border-2 border-white rounded-sm;
+  }
+
+  .node-handle-left {
+    @apply -left-1.5;
+  }
+
+  .node-handle-right {
+    @apply -right-1.5;
+  }
+
+  .sidebar-button {
+    @apply p-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors;
+  }
+
+  .node-card {
+    @apply bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700;
+    transition: all 0.15s ease-in-out;
+    min-height: 120px;
+  }
+
+  .node-header {
+    @apply h-8 flex items-center px-3 text-white font-medium;
+  }
+
+  .node-content {
+    @apply p-3 space-y-3;
+  }
+
+  .node-section {
+    @apply space-y-1;
+  }
+
+  .node-label {
+    @apply text-xs text-gray-500 dark:text-gray-400 font-medium;
+  }
+
+  .node-value {
+    @apply text-xs text-gray-700 dark:text-gray-300;
+  }
+
+  /* Node action buttons */
+  .node-actions {
+    @apply absolute -top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-1 
+      bg-white dark:bg-gray-800 rounded-md shadow-lg p-1 border border-gray-200 
+      dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity;
+  }
+
+  .node-action-button {
+    @apply p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 
+      text-gray-600 dark:text-gray-300 transition-colors;
+  }
+}
+
+/* Node deletion animation */
+.react-flow__node {
+  transition: transform 0.15s ease-in-out, opacity 0.15s ease-in-out;
+}
+
+.react-flow__node.scale-95 {
+  transform: scale(0.95);
+}
+
+.react-flow__node.opacity-50 {
+  opacity: 0.5;
+}
+
+/* Connection lines */
+.react-flow__edge-path {
+  stroke: #555;
+  stroke-width: 2;
+  transition: stroke 0.15s ease-in-out;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #2563eb;
+}
+
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: #555;
+  border: 2px solid white;
+}
+
+.react-flow__handle-left {
+  left: -4px;
+}
+
+.react-flow__handle-right {
+  right: -4px;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
