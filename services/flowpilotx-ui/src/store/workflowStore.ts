@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Node, Edge, XYPosition } from 'reactflow';
+import { Node, Edge, XYPosition, Viewport } from 'reactflow';
 import { WorkflowState, NodeUpdater, EdgeUpdater, NodeData, NodeType } from '../types/workflow';
 
 export type Theme = 'vscode' | 'miro';
@@ -24,25 +24,65 @@ const calculateNodeOutputs = (type: NodeType, inputs: { [key: string]: any }) =>
 
 interface WorkflowStore extends WorkflowState {
   theme: Theme;
+  isSidebarExpanded: boolean;
+  sourceNodeId: string | null;
+  viewport: Viewport | null;
   setTheme: (theme: Theme) => void;
-  addNode: (node: Node) => void;
+  setSidebarExpanded: (expanded: boolean) => void;
+  setSourceNodeId: (nodeId: string | null) => void;
+  addNode: (node: Node<NodeData>) => void;
   addEdge: (edge: Edge) => void;
   updateNodePosition: (nodeId: string, position: XYPosition) => void;
   updateNodeData: (nodeId: string, data: NodeData) => void;
   deleteNode: (nodeId: string) => void;
   setNodes: (updater: NodeUpdater) => void;
   setEdges: (updater: EdgeUpdater) => void;
+  connectNodes: (sourceId: string, targetNode: Node<NodeData>) => void;
+  setViewport: (viewport: Viewport) => void;
 }
 
-export const useWorkflowStore = create<WorkflowStore>((set) => ({
+export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   nodes: [],
   edges: [],
   theme: 'vscode', // Default theme
+  isSidebarExpanded: false, // Default sidebar state
+  sourceNodeId: null, // Track source node for auto-connection
+  viewport: null,
   setTheme: (theme) => set({ theme }),
+  setSidebarExpanded: (expanded) => {
+    set({ isSidebarExpanded: expanded });
+    if (!expanded) {
+      // Clear source node when closing sidebar
+      set({ sourceNodeId: null });
+    }
+  },
+  setSourceNodeId: (nodeId) => set({ sourceNodeId: nodeId }),
   addNode: (node) =>
-    set((state) => ({
-      nodes: [...state.nodes, node],
-    })),
+    set((state) => {
+      const nodes = [...state.nodes, node];
+      // If we have a source node, automatically connect it
+      if (state.sourceNodeId) {
+        const sourceNode = state.nodes.find(n => n.id === state.sourceNodeId);
+        if (sourceNode) {
+          const sourceOutput = Object.keys(sourceNode.data.outputs)[0];
+          const targetInput = Object.keys(node.data.inputs)[0];
+          const newEdge: Edge = {
+            id: `${state.sourceNodeId}-${node.id}`,
+            source: state.sourceNodeId,
+            target: node.id,
+            sourceHandle: `output-${sourceOutput}`,
+            targetHandle: `input-${targetInput}`,
+          };
+          return {
+            nodes,
+            edges: [...state.edges, newEdge],
+            sourceNodeId: null, // Clear source node after connection
+            isSidebarExpanded: false, // Close sidebar after connection
+          };
+        }
+      }
+      return { nodes };
+    }),
   addEdge: (edge) =>
     set((state) => ({
       edges: [...state.edges, edge],
@@ -73,6 +113,7 @@ export const useWorkflowStore = create<WorkflowStore>((set) => ({
       edges: state.edges.filter(
         (edge) => edge.source !== nodeId && edge.target !== nodeId
       ),
+      sourceNodeId: state.sourceNodeId === nodeId ? null : state.sourceNodeId,
     })),
   setNodes: (updater) =>
     set((state) => ({
@@ -81,5 +122,27 @@ export const useWorkflowStore = create<WorkflowStore>((set) => ({
   setEdges: (updater) =>
     set((state) => ({
       edges: typeof updater === 'function' ? updater(state.edges) : updater,
+    })),
+  connectNodes: (sourceId, targetNode) => {
+    const state = get();
+    const sourceNode = state.nodes.find(n => n.id === sourceId);
+    if (sourceNode) {
+      const sourceOutput = Object.keys(sourceNode.data.outputs)[0];
+      const targetInput = Object.keys(targetNode.data.inputs)[0];
+      const newEdge: Edge = {
+        id: `${sourceId}-${targetNode.id}`,
+        source: sourceId,
+        target: targetNode.id,
+        sourceHandle: `output-${sourceOutput}`,
+        targetHandle: `input-${targetInput}`,
+      };
+      set((state) => ({
+        edges: [...state.edges, newEdge],
+      }));
+    }
+  },
+  setViewport: (viewport) =>
+    set(() => ({
+      viewport,
     })),
 })); 

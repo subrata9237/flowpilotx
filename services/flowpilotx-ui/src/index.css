@@ -47,14 +47,14 @@
 
   /* Node action buttons */
   .node-actions {
-    @apply absolute -top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-1 
-      bg-white dark:bg-gray-800 rounded-md shadow-lg p-1 border border-gray-200 
-      dark:border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity;
+    @apply absolute -top-4 left-1/2 transform -translate-x-1/2 flex items-center gap-2.5
+      opacity-0 group-hover:opacity-100 transition-all duration-200;
   }
 
   .node-action-button {
-    @apply p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 
-      text-gray-600 dark:text-gray-300 transition-colors;
+    @apply p-1.5 
+      text-gray-400 hover:text-white
+      transition-all duration-200;
   }
 }
 
@@ -71,30 +71,89 @@
   opacity: 0.5;
 }
 
+/* Edge deletion animation */
+.react-flow__edge {
+  transition: opacity 0.15s ease-in-out;
+}
+
+.react-flow__edge.opacity-0 {
+  opacity: 0;
+}
+
 /* Connection lines */
 .react-flow__edge-path {
   stroke: #555;
   stroke-width: 2;
-  transition: stroke 0.15s ease-in-out;
+  transition: all 0.2s ease-in-out;
 }
 
-.react-flow__edge.selected .react-flow__edge-path {
-  stroke: #2563eb;
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path,
+.react-flow__edge:focus-within .react-flow__edge-path {
+  stroke: #22c55e !important;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 3px rgba(34, 197, 94, 0.3));
 }
 
+.react-flow__edge.selected .react-flow__edge-path marker path,
+.react-flow__edge:focus .react-flow__edge-path marker path,
+.react-flow__edge:focus-within .react-flow__edge-path marker path {
+  fill: #22c55e;
+  stroke: #22c55e;
+}
+
+.react-flow__edge.updating {
+  pointer-events: none;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  from {
+    stroke-dashoffset: 10;
+  }
+}
+
+/* Handle styles */
 .react-flow__handle {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   background: #555;
   border: 2px solid white;
+  border-radius: 50%;
+  transition: all 0.2s ease-in-out;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.react-flow__handle.connecting {
+  background: #22c55e;
+  border-color: #16a34a;
 }
 
 .react-flow__handle-left {
-  left: -4px;
+  left: -6px;
 }
 
 .react-flow__handle-right {
-  right: -4px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+}
+
+/* Dark theme handle adjustments */
+.bg-node-vscode-bg .react-flow__handle {
+  border-color: #1e1e1e;
+}
+
+.bg-node-vscode-bg .react-flow__handle:hover {
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
 }
 
 body {

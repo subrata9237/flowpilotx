@@ -15,6 +15,8 @@ import ReactFlow, {
   OnEdgesChange,
   Node,
   Edge,
+  MarkerType,
+  Viewport,
 } from 'reactflow';
 import { useWorkflowStore } from '../store/workflowStore';
 import { BaseNode } from './BaseNode';
@@ -23,22 +25,41 @@ import { NodeData } from '../types/workflow';
 import 'reactflow/dist/style.css';
 
 const nodeTypes = {
+  custom: BaseNode,
   add: BaseNode,
   multiply: BaseNode,
 };
 
 const defaultEdgeOptions = {
-  animated: true,
+  animated: false,
+  type: 'straight',
   style: {
     stroke: '#555',
-    strokeWidth: 2,
+    strokeWidth: 2
   },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    color: '#555',
+  },
+  className: 'react-flow__edge-path-selector'
 };
 
 export const WorkflowEditor: React.FC = () => {
-  const { nodes, edges, addNode, addEdge, updateNodePosition, deleteNode, theme } = useWorkflowStore();
+  const { 
+    nodes, 
+    edges, 
+    addNode, 
+    addEdge, 
+    updateNodePosition, 
+    deleteNode, 
+    theme, 
+    setEdges,
+    viewport,
+    setViewport 
+  } = useWorkflowStore();
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const [selectedEdges, setSelectedEdges] = useState<string[]>([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [showDeleteTooltip, setShowDeleteTooltip] = useState(false);
 
@@ -59,39 +80,58 @@ export const WorkflowEditor: React.FC = () => {
   }, [nodes]);
 
   useOnSelectionChange({
-    onChange: ({ nodes }) => {
-      const selected = nodes.map(node => node.id);
-      setSelectedNodes(selected);
-      setShowDeleteTooltip(selected.length > 0);
+    onChange: ({ nodes, edges }) => {
+      const selectedNodeIds = nodes.map(node => node.id);
+      const selectedEdgeIds = edges.map(edge => edge.id);
+      setSelectedNodes(selectedNodeIds);
+      setSelectedEdges(selectedEdgeIds);
+      setShowDeleteTooltip(selectedNodeIds.length > 0 || selectedEdgeIds.length > 0);
     },
   });
 
-  // Handle node deletion with animation
-  const handleNodeDeletion = useCallback((nodesToDelete: string[]) => {
-    nodesToDelete.forEach(nodeId => {
+  // Handle deletion with animation
+  const handleDeletion = useCallback(() => {
+    // Handle node deletion
+    selectedNodes.forEach(nodeId => {
       const nodeElement = document.querySelector(`[data-id="${nodeId}"]`);
       if (nodeElement) {
         nodeElement.classList.add('scale-95', 'opacity-50');
       }
     });
 
+    // Handle edge deletion
+    selectedEdges.forEach(edgeId => {
+      const edgeElement = document.querySelector(`[data-id="${edgeId}"]`);
+      if (edgeElement) {
+        edgeElement.classList.add('opacity-0');
+      }
+    });
+
     setTimeout(() => {
-      nodesToDelete.forEach(nodeId => deleteNode(nodeId));
+      // Delete nodes
+      selectedNodes.forEach(nodeId => deleteNode(nodeId));
+      
+      // Delete edges
+      if (selectedEdges.length > 0) {
+        setEdges(edges.filter(edge => !selectedEdges.includes(edge.id)));
+      }
+      
       setShowDeleteTooltip(false);
     }, 150);
-  }, [deleteNode]);
+  }, [selectedNodes, selectedEdges, deleteNode, setEdges, edges]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNodes.length > 0) {
-        handleNodeDeletion(selectedNodes);
+      if ((event.key === 'Delete' || event.key === 'Backspace') && 
+          (selectedNodes.length > 0 || selectedEdges.length > 0)) {
+        handleDeletion();
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodes, handleNodeDeletion]);
+  }, [selectedNodes, selectedEdges, handleDeletion]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -141,7 +181,16 @@ export const WorkflowEditor: React.FC = () => {
         target: connection.target || '',
         sourceHandle: connection.sourceHandle,
         targetHandle: connection.targetHandle,
-        type: 'smoothstep',
+        type: 'straight',
+        style: {
+          stroke: '#555',
+          strokeWidth: 2
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: '#555',
+        },
+        className: 'react-flow__edge-path-selector'
       };
       addEdge(newEdge);
     },
@@ -156,12 +205,34 @@ export const WorkflowEditor: React.FC = () => {
   );
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
+    // Handle all node changes including position updates
     changes.forEach((change) => {
       if (change.type === 'position' && change.position && change.id) {
+        // Update node position
         updateNodePosition(change.id, change.position);
+        
+        // Update connected edges
+        const connectedEdges = edges.filter(
+          edge => edge.source === change.id || edge.target === change.id
+        );
+        
+        if (connectedEdges.length > 0) {
+          const updatedEdges = edges.map(edge => {
+            if (edge.source === change.id || edge.target === change.id) {
+              return {
+                ...edge,
+                // This ensures smooth edge updates
+                type: 'bezier',
+                animated: false
+              };
+            }
+            return edge;
+          });
+          setEdges(updatedEdges);
+        }
       }
     });
-  }, [updateNodePosition]);
+  }, [updateNodePosition, edges, setEdges]);
 
   const onEdgesChange: OnEdgesChange = useCallback((changes) => {
     changes.forEach((change) => {
@@ -170,6 +241,11 @@ export const WorkflowEditor: React.FC = () => {
       }
     });
   }, [addEdge]);
+
+  // Save viewport on change
+  const onMoveEnd = useCallback((event: any, viewport: Viewport) => {
+    setViewport(viewport);
+  }, [setViewport]);
 
   return (
     <div 
@@ -188,11 +264,16 @@ export const WorkflowEditor: React.FC = () => {
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
         onInit={setReactFlowInstance}
+        onMoveEnd={onMoveEnd}
+        defaultViewport={viewport || undefined}
         className={theme === 'vscode' ? 'bg-node-vscode-bg' : 'bg-node-miro-bg'}
         minZoom={0.1}
         maxZoom={4}
         snapToGrid
         snapGrid={[16, 16]}
+        fitView={!viewport}
+        elementsSelectable={true}
+        selectNodesOnDrag={false}
       >
         <Background
           variant={BackgroundVariant.Dots}
@@ -213,7 +294,10 @@ export const WorkflowEditor: React.FC = () => {
               transition-colors duration-150`}
             >
               <span className="font-medium">
-                {selectedNodes.length} node{selectedNodes.length > 1 ? 's' : ''} selected
+                {selectedNodes.length > 0 && `${selectedNodes.length} node${selectedNodes.length > 1 ? 's' : ''}`}
+                {selectedNodes.length > 0 && selectedEdges.length > 0 && ' and '}
+                {selectedEdges.length > 0 && `${selectedEdges.length} connection${selectedEdges.length > 1 ? 's' : ''}`}
+                {' selected'}
               </span>
               <span className={deletePressed ? 'text-white/80' : 'text-gray-400'}>
                 Press Delete to remove

@@ -92,8 +92,12 @@ const SearchInput: React.FC<{
 
 export const Sidebar: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const theme = useWorkflowStore((state) => state.theme);
+  const isCollapsed = !useWorkflowStore((state) => state.isSidebarExpanded);
+  const setSidebarExpanded = useWorkflowStore((state) => state.setSidebarExpanded);
+  const sourceNodeId = useWorkflowStore((state) => state.sourceNodeId);
+  const addNode = useWorkflowStore((state) => state.addNode);
+  const nodes = useWorkflowStore((state) => state.nodes);
 
   const filteredNodes = nodeTemplates.filter(node => 
     node.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -110,17 +114,65 @@ export const Sidebar: React.FC = () => {
 
     // Create a drag preview
     const preview = document.createElement('div');
-    preview.className = 'w-16 h-16 bg-white rounded-lg shadow-lg flex items-center justify-center';
-    preview.innerHTML = node.icon ? node.icon.toString() : '';
+    const isVSCode = theme === 'vscode';
+    preview.className = `
+      w-16 h-16 rounded-lg shadow-lg flex items-center justify-center border-2
+      ${isVSCode ? 'bg-[#1e1e1e] border-[#454545]' : 'bg-white border-gray-200'}
+    `;
+    
+    // Create icon element
+    const iconDiv = document.createElement('div');
+    iconDiv.className = 'w-8 h-8 flex items-center justify-center';
+    const iconColor = node.type === 'add' 
+      ? (isVSCode ? '#9B51E0' : '#9B51E0') 
+      : (isVSCode ? '#F2994A' : '#F2994A');
+    
+    iconDiv.innerHTML = node.type === 'add' 
+      ? `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="${iconColor}" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="${iconColor}" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
+    
+    preview.appendChild(iconDiv);
     document.body.appendChild(preview);
     event.dataTransfer.setDragImage(preview, 32, 32);
-    setTimeout(() => document.body.removeChild(preview), 0);
+    
+    // Remove the preview element after a short delay
+    setTimeout(() => document.body.removeChild(preview), 100);
+  };
+
+  const handleNodeClick = (node: NodeTemplate) => {
+    // Find the source node in our nodes array
+    const sourceNode = nodes.find(n => n.id === sourceNodeId);
+    
+    // Calculate position relative to source node
+    let position = { x: 100, y: 100 };
+    if (sourceNode) {
+      position = {
+        x: sourceNode.position.x + 200, // Place 200 units to the right
+        y: sourceNode.position.y, // Same vertical position
+      };
+    }
+
+    // Create and add the new node
+    const newNode = {
+      id: `${node.type}-${Date.now()}`,
+      type: 'custom',
+      position,
+      data: {
+        type: node.type,
+        name: node.name,
+        description: node.description,
+        inputs: node.defaults?.inputs || { a: 0, b: 0 },
+        outputs: node.defaults?.outputs || { result: 0 },
+      },
+    };
+
+    addNode(newNode);
   };
 
   return (
     <div className={`
       flex flex-col border-r
-      ${isCollapsed ? 'w-16' : 'w-64'}
+      ${isCollapsed ? 'w-16' : 'w-72'}
       transition-all duration-300 ease-in-out
       ${theme === 'vscode' ? 
         'bg-node-vscode-bg border-node-vscode-border' : 
@@ -134,7 +186,7 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={() => setSidebarExpanded(isCollapsed)}
           className={`
             w-full flex items-center justify-center p-2 rounded-md 
             transition-colors duration-200
@@ -159,6 +211,7 @@ export const Sidebar: React.FC = () => {
               key={node.type}
               draggable
               onDragStart={(e) => handleDragStart(e, node)}
+              onClick={() => handleNodeClick(node)}
               className={`
                 w-12 h-12 rounded-lg cursor-grab active:cursor-grabbing
                 border transition-all duration-200
@@ -186,6 +239,7 @@ export const Sidebar: React.FC = () => {
                 key={node.type}
                 draggable
                 onDragStart={(e) => handleDragStart(e, node)}
+                onClick={() => handleNodeClick(node)}
                 className={`
                   flex items-center gap-3 p-3 rounded-lg cursor-grab active:cursor-grabbing
                   border transition-all duration-200
@@ -193,6 +247,7 @@ export const Sidebar: React.FC = () => {
                   ${theme === 'vscode' ? 
                     'bg-node-vscode-bg border-node-vscode-border hover:border-node-vscode-selected' : 
                     'bg-node-miro-bg border-node-miro-border hover:border-node-miro-selected'}
+                  ${sourceNodeId ? 'hover:ring-2 hover:ring-green-500' : ''}
                 `}
               >
                 <div className={`
