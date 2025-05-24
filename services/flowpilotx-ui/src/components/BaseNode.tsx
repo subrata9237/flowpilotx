@@ -148,6 +148,29 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id }) => {
           </div>
         )}
 
+        {/* Simple Info Footer */}
+        <div className={`
+          absolute -bottom-16 left-1/2 transform -translate-x-1/2
+          w-max max-w-[200px] p-2 rounded-md
+          ${isVSCode ? 
+            'bg-node-vscode-bg border-node-vscode-border' : 
+            'bg-node-miro-bg border-node-miro-border'
+          }
+          border text-center
+        `}>
+          <div className={`text-sm font-medium ${isVSCode ? 'text-node-vscode-text' : 'text-node-miro-text'}`}>
+            {data.name}
+          </div>
+          {data.description && (
+            <div className={`
+              text-xs mt-0.5
+              ${isVSCode ? 'text-node-vscode-text opacity-60' : 'text-node-miro-text opacity-60'}
+            `}>
+              {data.description}
+            </div>
+          )}
+        </div>
+
         {/* Handles */}
         {Object.keys(data.inputs).map((key) => (
           <Handle
