@@ -370,6 +370,26 @@ const NodeSettingsPage: React.FC = () => {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                // Show visual feedback
+                const nodeElement = document.querySelector(`[data-id="${nodeId}"]`);
+                if (nodeElement) {
+                  nodeElement.classList.add('animate-pulse');
+                  setTimeout(() => nodeElement.classList.remove('animate-pulse'), 1000);
+                }
+                // Add your test logic here
+                console.log('Testing node:', nodeId);
+              }}
+              className={`
+                px-4 py-2 text-sm font-medium rounded-md transition-colors
+                ${theme === 'vscode' ? 
+                  'bg-green-700 hover:bg-green-600 text-white' : 
+                  'bg-green-600 hover:bg-green-500 text-white'}
+              `}
+            >
+              Test Node
+            </button>
             <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
               <DocumentDuplicateIcon className="w-5 h-5" />
             </button>
