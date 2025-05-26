@@ -6,8 +6,6 @@ import {
   CalculatorIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  PlusIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { nodeDefinitions } from '../data/nodeDefinitions';
 
@@ -41,7 +39,6 @@ const SearchInput: React.FC<{
   onChange: (value: string) => void;
 }> = ({ value, onChange }) => {
   const theme = useWorkflowStore((state) => state.theme);
-  
   return (
     <div className="relative">
       <input
@@ -88,6 +85,7 @@ export const Sidebar: React.FC = () => {
   const sourceNodeId = useWorkflowStore((state) => state.sourceNodeId);
   const addNode = useWorkflowStore((state) => state.addNode);
   const nodes = useWorkflowStore((state) => state.nodes);
+  const addEdge = useWorkflowStore((state) => state.addEdge);
 
   const handleDragStart = (event: React.DragEvent, node: NodeTemplate) => {
     event.dataTransfer.setData('application/json', JSON.stringify({
@@ -126,33 +124,55 @@ export const Sidebar: React.FC = () => {
   };
 
   const handleNodeClick = (node: NodeTemplate) => {
-    // Find the source node in our nodes array
     const sourceNode = nodes.find(n => n.id === sourceNodeId);
-    
-    // Calculate position relative to source node
-    let position = { x: 100, y: 100 };
-    if (sourceNode) {
-      position = {
-        x: sourceNode.position.x + 200, // Place 200 units to the right
-        y: sourceNode.position.y, // Same vertical position
+    if (sourceNode && typeof sourceNodeId === 'string') {
+      const position = {
+        x: sourceNode.position.x + 200,
+        y: sourceNode.position.y,
       };
-    }
-
-    // Create and add the new node
-    const newNode = {
-      id: `${node.type}-${Date.now()}`,
-      type: 'custom',
-      position,
-      data: {
+      const newNodeId = `${node.type}-${Date.now()}`;
+      const newNode = {
+        id: newNodeId,
         type: node.type,
-        name: node.name,
-        description: node.description,
-        inputs: node.defaults?.inputs || { a: 0, b: 0 },
-        outputs: node.defaults?.outputs || { result: 0 },
-      },
-    };
-
-    addNode(newNode);
+        position,
+        data: {
+          type: node.type,
+          name: node.name,
+          description: node.description,
+          inputs: node.defaults?.inputs || { a: 0, b: 0 },
+          outputs: node.defaults?.outputs || { result: 0 },
+        },
+      };
+      addNode(newNode);
+      const outputKey = Object.keys(node.defaults?.outputs || { result: 0 })[0];
+      const inputKey = Object.keys(node.defaults?.inputs || { a: 0 })[0];
+      if (sourceNodeId) {
+        const newEdge = {
+          id: `e-${sourceNodeId}-${newNodeId}`,
+          source: sourceNodeId as string,
+          target: newNodeId,
+          sourceHandle: `output-${outputKey}`,
+          targetHandle: `input-${inputKey}`,
+        };
+        addEdge(newEdge);
+      }
+      setSidebarExpanded(false);
+    } else {
+      const position = { x: 100, y: 100 };
+      const newNode = {
+        id: `${node.type}-${Date.now()}`,
+        type: node.type,
+        position,
+        data: {
+          type: node.type,
+          name: node.name,
+          description: node.description,
+          inputs: node.defaults?.inputs || { a: 0, b: 0 },
+          outputs: node.defaults?.outputs || { result: 0 },
+        },
+      };
+      addNode(newNode);
+    }
   };
 
   return (
@@ -188,7 +208,6 @@ export const Sidebar: React.FC = () => {
           )}
         </button>
       </div>
-
       {/* Node List */}
       {isCollapsed ? (
         <div className="flex-1 p-2 space-y-2">

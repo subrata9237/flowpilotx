@@ -3,9 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkflowStore } from '../store/workflowStore';
 import {
   ArrowLeftIcon,
-  PlusIcon,
   ChevronDownIcon,
-  AdjustmentsHorizontalIcon,
   DocumentDuplicateIcon,
   XMarkIcon,
   PencilIcon,
@@ -212,19 +210,28 @@ const NodeSettingsPage: React.FC = () => {
   const [showAddParameter, setShowAddParameter] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
+  const nodeDefinition = nodeData ? nodeDefinitions[nodeData.type] : undefined;
+
   useEffect(() => {
     if (!node) {
       navigate('/');
     }
   }, [node, navigate]);
 
-  if (!node || !nodeData) {
-    return null;
-  }
+  useEffect(() => {
+    if (node && nodeDefinition) {
+      setNodeData(prev => {
+        if (!prev) return prev;
+        const config = { ...prev.config };
+        Object.entries(nodeDefinition.settings.config).forEach(([key, setting]) => {
+          if (config[key] === undefined) config[key] = setting.default;
+        });
+        return { ...prev, config };
+      });
+    }
+  }, [node, nodeDefinition]);
 
-  const nodeDefinition = nodeDefinitions[nodeData.type];
-  
-  if (!nodeDefinition) {
+  if (!node || !nodeData || !nodeDefinition) {
     return null;
   }
 
@@ -468,22 +475,6 @@ const NodeSettingsPage: React.FC = () => {
                 </h2>
               </div>
               <div className="p-4 space-y-6">
-                {/* Description Field */}
-                <div className="space-y-2">
-                  <label className={`text-sm ${theme === 'vscode' ? 
-                    'text-node-vscode-text' : 'text-node-miro-text'}`}>
-                    Description
-                  </label>
-                  <TextArea
-                    value={nodeData.description || ''}
-                    onChange={(value) => setNodeData(prev => prev ? {
-                      ...prev,
-                      description: value
-                    } : prev)}
-                    placeholder="Add a description for this node..."
-                    rows={3}
-                  />
-                </div>
 
                 {/* Existing Config Settings */}
                 {Object.entries(nodeDefinition.settings.config).map(([key, setting]) => (
@@ -499,12 +490,31 @@ const NodeSettingsPage: React.FC = () => {
                           ...prev,
                           config: { ...(prev.config || {}), [key]: value }
                         } : prev)}
-                        placeholder={setting.description}
+                        placeholder={nodeData.description}
                       />
                     )}
                     {setting.type === 'boolean' && (
                       <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${nodeData.config?.[key] ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNodeData(prev => prev ? {
+                              ...prev,
+                              config: { ...(prev.config || {}), [key]: !prev.config?.[key] }
+                            } : prev)
+                          }
+                          className={`w-6 h-6 rounded-full border transition-colors
+                            ${nodeData.config?.[key] ? 'bg-green-500 border-green-600' : 'bg-gray-300 border-gray-400'}
+                            flex items-center justify-center`}
+                          aria-pressed={!!nodeData.config?.[key]}
+                          title={nodeData.config?.[key] ? 'Deactivate' : 'Activate'}
+                        >
+                          {nodeData.config?.[key] ? (
+                            <CheckIcon className="w-4 h-4 text-white" />
+                          ) : (
+                            <XMarkIcon className="w-4 h-4 text-gray-500" />
+                          )}
+                        </button>
                         <span className="text-sm text-gray-900 dark:text-white">
                           {nodeData.config?.[key] ? 'Active' : 'Inactive'}
                         </span>

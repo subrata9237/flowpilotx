@@ -61,11 +61,12 @@ export interface ThemeColors {
 }
 
 export interface NodeSettingField {
-  type: 'number' | 'text' | 'boolean';
+  type: 'number' | 'text' | 'boolean' | 'select' | 'array';
   label: string;
   default?: any;
   description?: string;
   optional?: boolean;
+  options?: string[];
 }
 
 export interface NodeSettings {

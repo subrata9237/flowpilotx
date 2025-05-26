@@ -46,7 +46,7 @@ export const nodeDefinitions: Record<string, NodeDefinition> = {
         isActive: {
           type: 'boolean',
           label: 'Active',
-          default: true
+          default: false
         }
       }
     }

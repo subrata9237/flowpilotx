@@ -7,8 +7,6 @@ import {
   PowerIcon,
   TrashIcon,
   PlusIcon,
-  XMarkIcon,
-  PlusCircleIcon
 } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 import { useWorkflowStore } from '../store/workflowStore';
@@ -21,8 +19,6 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
   const setSidebarExpanded = useWorkflowStore(state => state.setSidebarExpanded);
   const setSourceNodeId = useWorkflowStore(state => state.setSourceNodeId);
   const sourceNodeId = useWorkflowStore(state => state.sourceNodeId);
-  const addNode = useWorkflowStore(state => state.addNode);
-  const addEdge = useWorkflowStore(state => state.addEdge);
   const [isActive, setIsActive] = useState(true);
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -60,62 +56,8 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
     navigate(`/node/${id}/settings`);
   };
 
-  const handleAddNextNode = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    // Get the first available node type from definitions
-    const newNodeType = Object.keys(nodeDefinitions)[0];
-    const nodeDefinition = nodeDefinitions[newNodeType];
-    
-    // Get current node's position
-    const currentNode = document.querySelector(`[data-id="${id}"]`);
-    const rect = currentNode?.getBoundingClientRect();
-    
-    // Calculate new position relative to current node
-    const newPosition = {
-      x: (rect?.right || 0) + 50,
-      y: (rect?.top || 0)
-    };
-
-    // Create new node using node definition
-    const newNodeId = `node-${Date.now()}`;
-    const newNode = {
-      id: newNodeId,
-      type: newNodeType,
-      position: newPosition,
-      data: {
-        type: newNodeType,
-        name: nodeDefinition.name,
-        inputs: nodeDefinition.settings.inputs,
-        outputs: nodeDefinition.settings.outputs,
-        config: nodeDefinition.settings.config
-      }
-    };
-    
-    addNode(newNode);
-    
-    // Create connection using the first available output and input
-    const outputKey = Object.keys(nodeDefinition.settings.outputs)[0];
-    const inputKey = Object.keys(nodeDefinition.settings.inputs)[0];
-    
-    const newEdge = {
-      id: `e-${id}-${newNodeId}`,
-      source: id,
-      target: newNodeId,
-      sourceHandle: `output-${outputKey}`,
-      targetHandle: `input-${inputKey}`
-    };
-    
-    addEdge(newEdge);
-    setSourceNodeId(newNodeId);
-    setSidebarExpanded(true);
-  };
 
   const isVSCode = theme === 'vscode';
-  const nodeTheme = isVSCode ? 'node-vscode' : 'node-miro';
-  const nodeColor = data.type === 'add' ? 
-    (isVSCode ? 'node-vscode-add' : 'node-miro-add') : 
-    (isVSCode ? 'node-vscode-multiply' : 'node-miro-multiply');
-
   const handleStyle = {
     input: `w-3 h-3 !bg-gray-400 border-2 ${isVSCode ? 'border-[#1e1e1e]' : 'border-white'} rounded-full transition-all duration-200 hover:scale-125`,
     output: `w-4 h-4 !bg-gray-400 border-2 ${isVSCode ? 'border-[#1e1e1e]' : 'border-white'} rounded-full transition-all duration-200 hover:scale-125`
@@ -201,28 +143,28 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
         >
           <button
             onClick={handleSelect}
-            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-100/20 dark:hover:bg-gray-700 transition"
             title="Settings"
           >
             <Cog6ToothIcon className="w-3 h-3" />
           </button>
           <button
             onClick={handleRun}
-            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-100/20 dark:hover:bg-gray-700 transition"
             title="Run"
           >
             <PlayIcon className="w-3 h-3" />
           </button>
           <button
             onClick={handleToggleActive}
-            className={`p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition ${!isActive ? 'text-gray-500' : ''}`}
+            className={`p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-100/20 dark:hover:bg-gray-700 transition ${!isActive ? 'text-gray-500' : ''}`}
             title={isActive ? 'Deactivate' : 'Activate'}
           >
             <PowerIcon className="w-3 h-3" />
           </button>
           <button
             onClick={handleDelete}
-            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition text-red-500"
+            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-100/20 dark:hover:bg-gray-700 transition text-red-500"
             title="Delete"
           >
             <TrashIcon className="w-3 h-3" />
