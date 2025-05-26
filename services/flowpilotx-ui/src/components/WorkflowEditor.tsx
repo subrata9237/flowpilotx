@@ -55,7 +55,7 @@ export const WorkflowEditor: React.FC = () => {
     theme, 
     setEdges,
     viewport,
-    setViewport 
+    setViewport,
   } = useWorkflowStore();
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -293,7 +293,7 @@ export const WorkflowEditor: React.FC = () => {
   return (
     <div className="w-full h-screen flex flex-col">
       <ToolbarHeader />
-      <div className="flex-1 h-full" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
+      <div className="flex-1 h-full relative" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
         <ReactFlow
           nodes={nodes}
           edges={edges}

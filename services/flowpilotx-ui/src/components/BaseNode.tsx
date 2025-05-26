@@ -78,6 +78,7 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
         ${data.type === 'add' ? (isVSCode ? 'text-node-vscode-add' : 'text-node-miro-add') : (isVSCode ? 'text-node-vscode-multiply' : 'text-node-miro-multiply')}
         hover:scale-105 hover:shadow-lg
       `}
+      onDoubleClick={handleSelect}
     >
       {/* Main Icon */}
       <div className="p-2 rounded-md transition-all duration-200">
