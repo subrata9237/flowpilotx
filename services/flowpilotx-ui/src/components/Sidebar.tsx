@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NodeTemplate, NodeCategory } from '../types/workflow';
+import { NodeTemplate } from '../types/workflow';
 import { useWorkflowStore } from '../store/workflowStore';
 import {
   MagnifyingGlassIcon,
@@ -9,42 +9,32 @@ import {
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { nodeDefinitions } from '../data/nodeDefinitions';
 
-const nodeTemplates: NodeTemplate[] = [
-  {
-    type: 'add',
-    name: 'Add Numbers',
-    icon: <PlusIcon className="w-5 h-5" />,
-    description: 'Add two numbers together',
-    color: '#9B51E0',
-    category: 'Math',
-    defaults: {
-      inputs: { a: 0, b: 0 },
-      outputs: { result: 0 }
-    }
-  },
-  {
-    type: 'multiply',
-    name: 'Multiply Numbers',
-    icon: <XMarkIcon className="w-5 h-5" />,
-    description: 'Multiply two numbers together',
-    color: '#F2994A',
-    category: 'Math',
-    defaults: {
-      inputs: { a: 0, b: 0 },
-      outputs: { result: 0 }
-    }
+// Convert nodeDefinitions to nodeTemplates format
+const nodeTemplates: NodeTemplate[] = Object.entries(nodeDefinitions).map(([_, def]) => ({
+  type: def.type,
+  name: def.name,
+  icon: def.icon,
+  description: def.description,
+  color: def.color,
+  category: def.category,
+  defaults: {
+    inputs: Object.fromEntries(
+      Object.entries(def.settings.inputs).map(([key, setting]) => [key, setting.default])
+    ),
+    outputs: Object.fromEntries(
+      Object.entries(def.settings.outputs).map(([key, setting]) => [key, setting.default || 0])
+    )
   }
-];
+}));
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const categories: NodeCategory[] = [
-  {
-    name: 'Math',
-    icon: <CalculatorIcon className="w-5 h-5" />,
-    nodes: nodeTemplates.filter(n => n.category === 'Math')
-  }
-];
+// Group nodes by category
+const categories = Array.from(new Set(nodeTemplates.map(node => node.category))).map(categoryName => ({
+  name: categoryName,
+  icon: categoryName === 'Math' ? <CalculatorIcon className="w-5 h-5" /> : <CalculatorIcon className="w-5 h-5" />,
+  nodes: nodeTemplates.filter(n => n.category === categoryName)
+}));
 
 const SearchInput: React.FC<{
   value: string;
@@ -98,10 +88,6 @@ export const Sidebar: React.FC = () => {
   const sourceNodeId = useWorkflowStore((state) => state.sourceNodeId);
   const addNode = useWorkflowStore((state) => state.addNode);
   const nodes = useWorkflowStore((state) => state.nodes);
-
-  const filteredNodes = nodeTemplates.filter(node => 
-    node.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const handleDragStart = (event: React.DragEvent, node: NodeTemplate) => {
     event.dataTransfer.setData('application/json', JSON.stringify({
@@ -219,61 +205,91 @@ export const Sidebar: React.FC = () => {
                 ${theme === 'vscode' ? 
                   'bg-node-vscode-bg border-node-vscode-border hover:border-node-vscode-selected' : 
                   'bg-node-miro-bg border-node-miro-border hover:border-node-miro-selected'}
-                ${node.type === 'add' ? 
-                  (theme === 'vscode' ? 'text-node-vscode-add' : 'text-node-miro-add') : 
-                  (theme === 'vscode' ? 'text-node-vscode-multiply' : 'text-node-miro-multiply')}
+                ${getNodeColorClass(node.type, theme)}
               `}
               title={node.name}
             >
               <div className="w-full h-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                {node.icon}
+                {React.createElement(node.icon, { className: "w-5 h-5" })}
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-2">
-            {filteredNodes.map((node) => (
-              <div
-                key={node.type}
-                draggable
-                onDragStart={(e) => handleDragStart(e, node)}
-                onClick={() => handleNodeClick(node)}
-                className={`
-                  flex items-center gap-3 p-3 rounded-lg cursor-grab active:cursor-grabbing
-                  border transition-all duration-200
-                  hover:shadow-lg group
-                  ${theme === 'vscode' ? 
-                    'bg-node-vscode-bg border-node-vscode-border hover:border-node-vscode-selected' : 
-                    'bg-node-miro-bg border-node-miro-border hover:border-node-miro-selected'}
-                  ${sourceNodeId ? 'hover:ring-2 hover:ring-green-500' : ''}
-                `}
-              >
+        <div className="flex-1 overflow-y-auto">
+          {categories.map((category) => (
+            <div key={category.name}>
+              <div className={`
+                flex items-center gap-2 p-4 border-b
+                ${theme === 'vscode' ? 'border-node-vscode-border' : 'border-node-miro-border'}
+              `}>
                 <div className={`
-                  w-10 h-10 rounded-lg flex items-center justify-center
-                  group-hover:scale-110 transition-transform duration-200
-                  ${node.type === 'add' ? 
-                    (theme === 'vscode' ? 'text-node-vscode-add' : 'text-node-miro-add') : 
-                    (theme === 'vscode' ? 'text-node-vscode-multiply' : 'text-node-miro-multiply')}
+                  ${theme === 'vscode' ? 'text-node-vscode-text' : 'text-node-miro-text'}
                 `}>
-                  {node.icon}
+                  {category.icon}
                 </div>
-                <div>
-                  <h3 className={`text-sm font-medium mb-0.5
-                    ${theme === 'vscode' ? 'text-node-vscode-text' : 'text-node-miro-text'}`}>
-                    {node.name}
-                  </h3>
-                  <p className={`text-xs
-                    ${theme === 'vscode' ? 'text-node-vscode-text opacity-60' : 'text-node-miro-text opacity-60'}`}>
-                    {node.description}
-                  </p>
-                </div>
+                <span className={`
+                  font-medium
+                  ${theme === 'vscode' ? 'text-node-vscode-text' : 'text-node-miro-text'}
+                `}>
+                  {category.name}
+                </span>
               </div>
-            ))}
-          </div>
+              <div className="p-4 grid grid-cols-1 gap-2">
+                {category.nodes
+                  .filter(node => 
+                    node.name.toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  .map((node) => (
+                    <div
+                      key={node.type}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, node)}
+                      onClick={() => handleNodeClick(node)}
+                      className={`
+                        p-3 rounded-lg cursor-grab active:cursor-grabbing
+                        border transition-all duration-200
+                        hover:shadow-lg
+                        ${theme === 'vscode' ? 
+                          'bg-node-vscode-bg border-node-vscode-border hover:border-node-vscode-selected' : 
+                          'bg-node-miro-bg border-node-miro-border hover:border-node-miro-selected'}
+                      `}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`
+                          p-2 rounded-md
+                          ${getNodeColorClass(node.type, theme)}
+                        `}>
+                          {React.createElement(node.icon, { className: "w-5 h-5" })}
+                        </div>
+                        <div>
+                          <h3 className={`
+                            font-medium
+                            ${theme === 'vscode' ? 'text-node-vscode-text' : 'text-node-miro-text'}
+                          `}>
+                            {node.name}
+                          </h3>
+                          <p className={`
+                            text-sm
+                            ${theme === 'vscode' ? 'text-node-vscode-text opacity-60' : 'text-node-miro-text opacity-60'}
+                          `}>
+                            {node.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
+};
+
+// Helper function to get node color class
+const getNodeColorClass = (nodeType: string, theme: string) => {
+  const prefix = theme === 'vscode' ? 'text-node-vscode-' : 'text-node-miro-';
+  return `${prefix}${nodeType}`;
 }; 

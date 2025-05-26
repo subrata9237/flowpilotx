@@ -1,25 +1,15 @@
 import { create } from 'zustand';
 import { Node, Edge, XYPosition, Viewport } from 'reactflow';
 import { WorkflowState, NodeUpdater, EdgeUpdater, NodeData, NodeType } from '../types/workflow';
+import { nodeDefinitions } from '../data/nodeDefinitions';
 
 export type Theme = 'vscode' | 'miro';
 
 // Calculate node outputs based on type and inputs
 const calculateNodeOutputs = (type: NodeType, inputs: { [key: string]: any }) => {
-  switch (type) {
-    case 'add': {
-      const a = Number(inputs.a) || 0;
-      const b = Number(inputs.b) || 0;
-      return { result: a + b };
-    }
-    case 'multiply': {
-      const a = Number(inputs.a) || 0;
-      const b = Number(inputs.b) || 0;
-      return { result: a * b };
-    }
-    default:
-      return { result: 0 };
-  }
+  const nodeDefinition = nodeDefinitions[type];
+  if (!nodeDefinition) return {};
+  return nodeDefinition.calculate(inputs);
 };
 
 interface WorkflowStore extends WorkflowState {

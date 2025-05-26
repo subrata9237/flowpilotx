@@ -12,17 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 import { useWorkflowStore } from '../store/workflowStore';
-
-const getNodeIcon = (type: string) => {
-  switch (type) {
-    case 'add':
-      return <PlusIcon className="w-6 h-6" />;
-    case 'multiply':
-      return <XMarkIcon className="w-6 h-6" />;
-    default:
-      return null;
-  }
-};
+import { nodeDefinitions } from '../data/nodeDefinitions';
 
 export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type }) => {
   const navigate = useNavigate();
@@ -31,8 +21,9 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
   const setSidebarExpanded = useWorkflowStore(state => state.setSidebarExpanded);
   const setSourceNodeId = useWorkflowStore(state => state.setSourceNodeId);
   const sourceNodeId = useWorkflowStore(state => state.sourceNodeId);
+  const addNode = useWorkflowStore(state => state.addNode);
+  const addEdge = useWorkflowStore(state => state.addEdge);
   const [isActive, setIsActive] = useState(true);
-  const [showActions, setShowActions] = useState(false);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -58,14 +49,64 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
     setIsActive(!isActive);
   };
 
+  const handleExpandSidebar = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSourceNodeId(id);
+    setSidebarExpanded(true);
+  };
+
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigate(`/node/${id}/settings`);
   };
 
-  const handleExpandSidebar = (e: React.MouseEvent) => {
+  const handleAddNextNode = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setSourceNodeId(id);
+    // Get the first available node type from definitions
+    const newNodeType = Object.keys(nodeDefinitions)[0];
+    const nodeDefinition = nodeDefinitions[newNodeType];
+    
+    // Get current node's position
+    const currentNode = document.querySelector(`[data-id="${id}"]`);
+    const rect = currentNode?.getBoundingClientRect();
+    
+    // Calculate new position relative to current node
+    const newPosition = {
+      x: (rect?.right || 0) + 50,
+      y: (rect?.top || 0)
+    };
+
+    // Create new node using node definition
+    const newNodeId = `node-${Date.now()}`;
+    const newNode = {
+      id: newNodeId,
+      type: newNodeType,
+      position: newPosition,
+      data: {
+        type: newNodeType,
+        name: nodeDefinition.name,
+        inputs: nodeDefinition.settings.inputs,
+        outputs: nodeDefinition.settings.outputs,
+        config: nodeDefinition.settings.config
+      }
+    };
+    
+    addNode(newNode);
+    
+    // Create connection using the first available output and input
+    const outputKey = Object.keys(nodeDefinition.settings.outputs)[0];
+    const inputKey = Object.keys(nodeDefinition.settings.inputs)[0];
+    
+    const newEdge = {
+      id: `e-${id}-${newNodeId}`,
+      source: id,
+      target: newNodeId,
+      sourceHandle: `output-${outputKey}`,
+      targetHandle: `input-${inputKey}`
+    };
+    
+    addEdge(newEdge);
+    setSourceNodeId(newNodeId);
     setSidebarExpanded(true);
   };
 
@@ -82,6 +123,9 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
 
   const isSourceNode = sourceNodeId === id;
 
+  const nodeDefinition = nodeDefinitions[data.type];
+  const Icon = nodeDefinition?.icon;
+
   return (
     <div 
       className={`
@@ -90,8 +134,6 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
         ${isSourceNode ? 'ring-2 ring-green-500 ring-offset-2' : ''}
         group
       `}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
       onDoubleClick={(e) => {
         e.stopPropagation();
         navigate(`/node/${id}/settings`);
@@ -119,7 +161,7 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
       `}>
         {/* Main Icon */}
         <div className="p-2 rounded-md transition-all duration-150">
-          {getNodeIcon(data.type)}
+          {Icon && <Icon className="w-5 h-5" style={{ color: nodeDefinition.color }} />}
         </div>
 
         {/* Add Button */}
@@ -144,64 +186,68 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
           <PlusIcon className="w-4 h-4" />
         </button>
 
-        {/* Action Buttons - Show on Hover */}
-        {showActions && (
-          <div className={`
-            absolute -top-7 left-1/2 transform -translate-x-1/2 
-            flex items-center gap-0.5 p-0.5 rounded-md
-            ${isVSCode ? 
-              'bg-transparent text-node-vscode-text' : 
-              'bg-transparent text-node-miro-text'
-            }
-            opacity-0 group-hover:opacity-100
+        {/* Action Bar */}
+        <div
+          className={`
+            absolute -top-6 left-1/2 transform -translate-x-1/2
+            flex items-center gap-0.5
+            ${selected ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
+            group-hover:opacity-100 group-hover:pointer-events-auto
+            hover:opacity-100 hover:pointer-events-auto
             transition-all duration-200
-          `}>
-            <button
-              onClick={handleSelect}
-              className="p-0.5 rounded hover:text-white"
-              title="Settings"
-            >
-              <Cog6ToothIcon className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleRun}
-              className="p-0.5 rounded hover:text-white"
-              title="Run"
-            >
-              <PlayIcon className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleToggleActive}
-              className={`p-0.5 rounded hover:text-white ${!isActive ? 'text-gray-500' : ''}`}
-              title={isActive ? 'Deactivate' : 'Activate'}
-            >
-              <PowerIcon className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleDelete}
-              className="p-0.5 rounded hover:text-white text-red-500"
-              title="Delete"
-            >
-              <TrashIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
+            z-20
+          `}
+          style={{ minHeight: 20, minWidth: 80, padding: '0.125rem 0.25rem' }}
+        >
+          <button
+            onClick={handleSelect}
+            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+            title="Settings"
+          >
+            <Cog6ToothIcon className="w-3 h-3" />
+          </button>
+          <button
+            onClick={handleRun}
+            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+            title="Run"
+          >
+            <PlayIcon className="w-3 h-3" />
+          </button>
+          <button
+            onClick={handleToggleActive}
+            className={`p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition ${!isActive ? 'text-gray-500' : ''}`}
+            title={isActive ? 'Deactivate' : 'Activate'}
+          >
+            <PowerIcon className="w-3 h-3" />
+          </button>
+          <button
+            onClick={handleDelete}
+            className="p-1 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full bg-transparent hover:bg-gray-200 dark:hover:bg-gray-700 transition text-red-500"
+            title="Delete"
+          >
+            <TrashIcon className="w-3 h-3" />
+          </button>
+        </div>
 
         {/* Simple Info Footer */}
         <div className={`
-          absolute -bottom-10 left-1/2 transform -translate-x-1/2
+          absolute top-full left-1/2 transform -translate-x-1/2 mt-2
           w-max max-w-[180px] px-1.5 py-1
           text-center
+          ${isVSCode ? 'bg-node-vscode-bg' : 'bg-node-miro-bg'}
+          rounded-md shadow-sm
+          border ${isVSCode ? 'border-node-vscode-border' : 'border-node-miro-border'}
+          z-10
         `}>
-          <div className={`text-xs font-medium ${isVSCode ? 'text-node-vscode-text' : 'text-node-miro-text'}`}>
+          <div className={`text-xs font-medium ${isVSCode ? 'text-node-vscode-text' : 'text-node-miro-text'} text-center`}>
             {data.name}
           </div>
-          {data.description && (
+          {(data.description || data.config?.description) && (
             <div className={`
-              text-[10px] mt-0.5
+              text-[10px] mt-0.5 text-center
               ${isVSCode ? 'text-node-vscode-text/70' : 'text-node-miro-text/70'}
             `}>
-              {data.description}
+              {data.description || data.config?.description}
             </div>
           )}
         </div>
@@ -230,4 +276,4 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
       </div>
     </div>
   );
-}); 
+});

@@ -37,7 +37,7 @@ export const DraggableNode: React.FC<DraggableNodeProps> = ({ node }) => {
               color: node.color,
             }}
           >
-            {node.icon}
+            {React.createElement(node.icon, { className: "w-5 h-5" })}
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">

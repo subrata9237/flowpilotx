@@ -1,15 +1,16 @@
 import { Node as ReactFlowNode, Edge as ReactFlowEdge, NodeChange, EdgeChange } from 'reactflow';
 import { ReactNode } from 'react';
+import { nodeDefinitions } from '../data/nodeDefinitions';
 
-export type NodeType = 'add' | 'multiply';
+export type NodeType = keyof typeof nodeDefinitions;
 
 export interface NodeTemplate {
   type: NodeType;
   name: string;
-  icon: ReactNode;
+  icon: React.ComponentType<{ className?: string }>;
   description: string;
   color: string;
-  category: 'Math';
+  category: string;
   defaults?: {
     inputs?: Record<string, any>;
     outputs?: Record<string, any>;
@@ -76,9 +77,10 @@ export interface NodeSettings {
 export interface NodeDefinition {
   type: NodeType;
   name: string;
-  icon: React.ComponentType;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   description: string;
   color: string;
   category: string;
+  calculate: (inputs: { [key: string]: any }) => { [key: string]: any };
   settings: NodeSettings;
 } 

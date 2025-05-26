@@ -230,10 +230,16 @@ const NodeSettingsPage: React.FC = () => {
 
   const handleSave = () => {
     if (nodeData) {
-      updateNodeData(nodeId!, nodeData);
-      // Show success toast
+      const updatedData = {
+        ...nodeData,
+        description: nodeData.description || '',
+        config: {
+          ...nodeData.config,
+          description: nodeData.config?.description || ''
+        }
+      };
+      updateNodeData(nodeId!, updatedData);
       setShowSuccessToast(true);
-      // Hide toast after 3 seconds
       setTimeout(() => {
         setShowSuccessToast(false);
         navigate('/');
@@ -462,6 +468,24 @@ const NodeSettingsPage: React.FC = () => {
                 </h2>
               </div>
               <div className="p-4 space-y-6">
+                {/* Description Field */}
+                <div className="space-y-2">
+                  <label className={`text-sm ${theme === 'vscode' ? 
+                    'text-node-vscode-text' : 'text-node-miro-text'}`}>
+                    Description
+                  </label>
+                  <TextArea
+                    value={nodeData.description || ''}
+                    onChange={(value) => setNodeData(prev => prev ? {
+                      ...prev,
+                      description: value
+                    } : prev)}
+                    placeholder="Add a description for this node..."
+                    rows={3}
+                  />
+                </div>
+
+                {/* Existing Config Settings */}
                 {Object.entries(nodeDefinition.settings.config).map(([key, setting]) => (
                   <div key={key} className="space-y-2">
                     <label className={`text-sm ${theme === 'vscode' ? 

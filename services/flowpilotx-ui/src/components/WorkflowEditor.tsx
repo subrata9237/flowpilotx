@@ -25,11 +25,10 @@ import { NodeData } from '../types/workflow';
 import { nodeDefinitions } from '../data/nodeDefinitions';
 import 'reactflow/dist/style.css';
 
-const nodeTypes = {
-  custom: BaseNode,
-  add: BaseNode,
-  multiply: BaseNode,
-};
+// Create nodeTypes dynamically from nodeDefinitions
+const nodeTypes = Object.fromEntries(
+  Object.keys(nodeDefinitions).map(type => [type, BaseNode])
+);
 
 const defaultEdgeOptions = {
   animated: false,
@@ -111,12 +110,10 @@ export const WorkflowEditor: React.FC = () => {
     setTimeout(() => {
       // Delete nodes
       selectedNodes.forEach(nodeId => deleteNode(nodeId));
-      
       // Delete edges
       if (selectedEdges.length > 0) {
         setEdges(edges.filter(edge => !selectedEdges.includes(edge.id)));
       }
-      
       setShowDeleteTooltip(false);
     }, 150);
   }, [selectedNodes, selectedEdges, deleteNode, setEdges, edges]);
