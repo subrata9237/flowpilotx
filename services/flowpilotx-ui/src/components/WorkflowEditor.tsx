@@ -259,11 +259,9 @@ export const WorkflowEditor: React.FC = () => {
   const handleFitView = useCallback(() => {
     if (reactFlowInstance) {
       reactFlowInstance.fitView({
-        padding: 0.5,
-        maxZoom: 1.5,
-        minZoom: 0.5,
-        duration: 800,
-        includeHiddenNodes: false
+        padding: 0.2,
+        maxZoom: 1.2,
+        duration: 200
       });
     }
   }, [reactFlowInstance]);
@@ -294,10 +292,9 @@ export const WorkflowEditor: React.FC = () => {
         snapGrid={[16, 16]}
         fitView={false}
         fitViewOptions={{ 
-          padding: 0.5,
-          maxZoom: 1.5,
-          minZoom: 0.5,
-          duration: 800
+          padding: 0.2,
+          maxZoom: 1.2,
+          duration: 200
         }}
         elementsSelectable={true}
         selectNodesOnDrag={false}
@@ -312,10 +309,9 @@ export const WorkflowEditor: React.FC = () => {
         <Controls 
           showFitView={true}
           fitViewOptions={{ 
-            padding: 0.5,
-            maxZoom: 1.5,
-            minZoom: 0.5,
-            duration: 800
+            padding: 0.2,
+            maxZoom: 1.2,
+            duration: 200
           }}
           className={`
             ${theme === 'vscode' 
@@ -324,13 +320,6 @@ export const WorkflowEditor: React.FC = () => {
             }
             border rounded-lg shadow-lg
           `}
-          style={{
-            backgroundColor: theme === 'vscode' ? '#252526' : '#FFFFFF',
-            border: `1px solid ${theme === 'vscode' ? '#454545' : '#E0E0E0'}`,
-            boxShadow: theme === 'vscode' 
-              ? '0 4px 6px -1px rgba(0, 0, 0, 0.4)' 
-              : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          }}
         />
         <MiniMap
           nodeColor={theme === 'vscode' ? '#3C3C3C' : '#F5F5F5'}
@@ -345,9 +334,6 @@ export const WorkflowEditor: React.FC = () => {
           style={{
             backgroundColor: theme === 'vscode' ? '#252526' : '#FFFFFF',
             border: `2px solid ${theme === 'vscode' ? '#454545' : '#E0E0E0'}`,
-            boxShadow: theme === 'vscode' 
-              ? '0 4px 6px -1px rgba(0, 0, 0, 0.4)' 
-              : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
           }}
         />
         <ThemeToggle />
