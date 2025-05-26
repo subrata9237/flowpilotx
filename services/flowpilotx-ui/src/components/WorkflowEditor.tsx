@@ -59,6 +59,7 @@ export const WorkflowEditor: React.FC = () => {
     viewport,
     setViewport,
     showStickyNotes,
+    setNodes,
   } = useWorkflowStore();
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -246,7 +247,6 @@ export const WorkflowEditor: React.FC = () => {
   );
 
   const onNodesChange: OnNodesChange = useCallback((changes) => {
-    // Handle all node changes including position updates
     changes.forEach((change) => {
       if (change.type === 'position' && change.position && change.id) {
         // Update node position
@@ -272,8 +272,20 @@ export const WorkflowEditor: React.FC = () => {
           setEdges(updatedEdges);
         }
       }
+      if (change.type === 'dimensions' && change.id && change.dimensions) {
+        const { width, height } = change.dimensions;
+        if (width !== undefined && height !== undefined) {
+          setNodes((nodes) =>
+            nodes.map((node) =>
+              node.id === change.id
+                ? { ...node, width, height }
+                : node
+            )
+          );
+        }
+      }
     });
-  }, [updateNodePosition, edges, setEdges]);
+  }, [updateNodePosition, edges, setEdges, setNodes]);
 
   const onEdgesChange: OnEdgesChange = useCallback((changes) => {
     changes.forEach((change) => {

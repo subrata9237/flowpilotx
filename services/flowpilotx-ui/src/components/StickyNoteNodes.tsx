@@ -70,7 +70,6 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
         zIndex: 1,
         position: 'relative',
         pointerEvents: 'auto',
-        border: '1.5px solid #e2e8f0', // n8n-like border
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         borderRadius: 8,
         padding: 0,
