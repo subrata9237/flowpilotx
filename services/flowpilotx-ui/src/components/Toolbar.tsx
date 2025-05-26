@@ -1,11 +1,22 @@
 import React from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { Node, NodeData } from '../types/workflow';
-
+import { nodeDefinitions } from '../data/nodeDefinitions';
+``
 export const Toolbar: React.FC = () => {
   const addNode = useWorkflowStore((state) => state.addNode);
 
   const createNode = (type: 'add' | 'multiply') => {
+    const nodeDefinition = nodeDefinitions[type];
+    
+    // Initialize config with default values from node definition
+    const config: Record<string, any> = {};
+    if (nodeDefinition) {
+      Object.entries(nodeDefinition.settings.config).forEach(([key, setting]) => {
+        config[key] = setting.default;
+      });
+    }
+
     const newNode: Node = {
       id: `${type}-${Date.now()}`,
       type,
@@ -15,6 +26,7 @@ export const Toolbar: React.FC = () => {
         type,
         inputs: { a: 0, b: 0 },
         outputs: { result: 0 },
+        config: config  // Add the initialized config
       } as NodeData,
     };
     addNode(newNode);

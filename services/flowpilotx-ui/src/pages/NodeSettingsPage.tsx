@@ -14,6 +14,8 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import { InputField } from '../components/InputField';
+import { nodeDefinitions } from '../data/nodeDefinitions';
+import { NodeSettingField } from '../types/workflow';
 
 const TextArea: React.FC<{
   value: string;
@@ -130,50 +132,66 @@ const ParameterRow: React.FC<{
 const ParameterSection: React.FC<{
   title: string;
   parameters: Record<string, any>;
+  parameterDefinitions: Record<string, NodeSettingField>;
   onParameterChange: (name: string, value: any) => void;
-  onParameterNameChange: (oldName: string, newName: string) => void;
-  onParameterDelete: (name: string) => void;
-  onParameterAdd: () => void;
   theme: string;
-}> = ({ title, parameters, onParameterChange, onParameterNameChange, onParameterDelete, onParameterAdd, theme }) => {
-  const [editingParam, setEditingParam] = useState<string | null>(null);
-
+}> = ({ title, parameters, parameterDefinitions, onParameterChange, theme }) => {
   return (
     <div className={`rounded-lg shadow-lg border ${theme === 'vscode' ? 
       'bg-node-vscode-bg border-node-vscode-border' : 
       'bg-node-miro-bg border-node-miro-border'}`}>
-      <div className={`p-4 border-b flex justify-between items-center ${theme === 'vscode' ? 
+      <div className={`p-4 border-b ${theme === 'vscode' ? 
         'border-node-vscode-border' : 'border-node-miro-border'}`}>
         <h2 className={`text-lg font-medium ${theme === 'vscode' ? 
           'text-node-vscode-text' : 'text-node-miro-text'}`}>
           {title}
         </h2>
-        <button
-          onClick={onParameterAdd}
-          className={`p-1.5 rounded-md transition-colors ${theme === 'vscode' ? 
-            'hover:bg-node-vscode-button text-node-vscode-text' : 
-            'hover:bg-node-miro-button text-node-miro-text'}`}
-          title="Add Parameter"
-        >
-          <PlusIcon className="w-5 h-5" />
-        </button>
       </div>
       <div className="p-4 space-y-4">
-        {Object.entries(parameters).map(([name, value]) => (
-          <ParameterRow
-            key={name}
-            name={name}
-            value={value}
-            onValueChange={(newValue) => onParameterChange(name, newValue)}
-            onNameChange={(newName) => {
-              onParameterNameChange(name, newName);
-              setEditingParam(null);
-            }}
-            onDelete={() => onParameterDelete(name)}
-            isEditing={editingParam === name}
-            onEditToggle={() => setEditingParam(editingParam === name ? null : name)}
-            theme={theme}
-          />
+        {Object.entries(parameterDefinitions).map(([key, definition]) => (
+          <div key={key} className="space-y-2">
+            <label className={`text-sm ${theme === 'vscode' ? 
+              'text-node-vscode-text' : 'text-node-miro-text'}`}>
+              {definition.label}
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type={definition.type === 'number' ? 'number' : 'text'}
+                value={parameters[key] ?? definition.default}
+                onChange={(e) => onParameterChange(key, 
+                  definition.type === 'number' ? Number(e.target.value) : e.target.value
+                )}
+                className={`
+                  w-full px-3 py-2 rounded-md text-sm
+                  transition-all duration-200
+                  focus:outline-none
+                  ${theme === 'vscode' ? `
+                    bg-node-vscode-input-bg
+                    border border-node-vscode-input-border
+                    text-node-vscode-text
+                    placeholder-node-vscode-input-placeholder
+                    hover:border-node-vscode-input-hover-border
+                    focus:border-node-vscode-input-focus-border
+                  ` : `
+                    bg-node-miro-input-bg
+                    border border-node-miro-input-border
+                    text-node-miro-text
+                    placeholder-node-miro-input-placeholder
+                    hover:border-node-miro-input-hover-border
+                    focus:border-node-miro-input-focus-border
+                  `}
+                `}
+                placeholder={definition.description}
+              />
+            </div>
+            {definition.description && (
+              <p className={`text-xs ${theme === 'vscode' ? 
+                'text-node-vscode-text opacity-60' : 
+                'text-node-miro-text opacity-60'}`}>
+                {definition.description}
+              </p>
+            )}
+          </div>
         ))}
       </div>
     </div>
@@ -201,6 +219,12 @@ const NodeSettingsPage: React.FC = () => {
   }, [node, navigate]);
 
   if (!node || !nodeData) {
+    return null;
+  }
+
+  const nodeDefinition = nodeDefinitions[nodeData.type];
+  
+  if (!nodeDefinition) {
     return null;
   }
 
@@ -405,10 +429,8 @@ const NodeSettingsPage: React.FC = () => {
             <ParameterSection
               title="Input Parameters"
               parameters={nodeData.inputs}
+              parameterDefinitions={nodeDefinition.settings.inputs}
               onParameterChange={handleInputChange}
-              onParameterNameChange={handleInputNameChange}
-              onParameterDelete={handleRemoveParameter}
-              onParameterAdd={handleAddInput}
               theme={theme}
             />
           </div>
@@ -418,26 +440,17 @@ const NodeSettingsPage: React.FC = () => {
             <ParameterSection
               title="Output Parameters"
               parameters={nodeData.outputs}
+              parameterDefinitions={nodeDefinition.settings.outputs}
               onParameterChange={(name, value) => {
-                setNodeData((prev) => prev ? {
+                setNodeData(prev => prev ? {
                   ...prev,
                   outputs: { ...prev.outputs, [name]: value }
                 } : prev);
               }}
-              onParameterNameChange={handleOutputNameChange}
-              onParameterDelete={(name) => {
-                setNodeData((prev) => {
-                  if (!prev) return prev;
-                  const newOutputs = { ...prev.outputs };
-                  delete newOutputs[name];
-                  return { ...prev, outputs: newOutputs };
-                });
-              }}
-              onParameterAdd={handleAddOutput}
               theme={theme}
             />
 
-            {/* Node Settings with Description */}
+            {/* Node Settings */}
             <div className={`rounded-lg shadow-lg border ${theme === 'vscode' ? 
               'bg-node-vscode-bg border-node-vscode-border' : 
               'bg-node-miro-bg border-node-miro-border'}`}>
@@ -449,49 +462,32 @@ const NodeSettingsPage: React.FC = () => {
                 </h2>
               </div>
               <div className="p-4 space-y-6">
-                {/* Node Info */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Node Type
-                    </span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                      {nodeData.type}
-                    </span>
+                {Object.entries(nodeDefinition.settings.config).map(([key, setting]) => (
+                  <div key={key} className="space-y-2">
+                    <label className={`text-sm ${theme === 'vscode' ? 
+                      'text-node-vscode-text' : 'text-node-miro-text'}`}>
+                      {setting.label}
+                    </label>
+                    {setting.type === 'text' && (
+                      <TextArea
+                        value={nodeData.config?.[key] || setting.default}
+                        onChange={(value) => setNodeData(prev => prev ? {
+                          ...prev,
+                          config: { ...(prev.config || {}), [key]: value }
+                        } : prev)}
+                        placeholder={setting.description}
+                      />
+                    )}
+                    {setting.type === 'boolean' && (
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${nodeData.config?.[key] ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        <span className="text-sm text-gray-900 dark:text-white">
+                          {nodeData.config?.[key] ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
-                      Node ID
-                    </span>
-                    <span className="text-sm font-mono text-gray-900 dark:text-white">
-                      {nodeId}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <label className={`text-sm ${theme === 'vscode' ? 
-                    'text-node-vscode-text' : 'text-node-miro-text'}`}>
-                    Description
-                  </label>
-                  <TextArea
-                    value={nodeData.description || ''}
-                    onChange={(value) => setNodeData((prev) => prev ? { ...prev, description: value } : prev)}
-                    placeholder="Add a description of what this node does..."
-                  />
-                </div>
-
-                {/* Additional Settings can be added here */}
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-600 dark:text-gray-400">
-                    Node Status
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span className="text-sm text-gray-900 dark:text-white">Active</span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>

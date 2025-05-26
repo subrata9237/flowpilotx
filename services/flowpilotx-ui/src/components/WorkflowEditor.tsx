@@ -22,6 +22,7 @@ import { useWorkflowStore } from '../store/workflowStore';
 import { BaseNode } from './BaseNode';
 import { ThemeToggle } from './ThemeToggle';
 import { NodeData } from '../types/workflow';
+import { nodeDefinitions } from '../data/nodeDefinitions';
 import 'reactflow/dist/style.css';
 
 const nodeTypes = {
@@ -154,6 +155,30 @@ export const WorkflowEditor: React.FC = () => {
       if (!jsonData) return;
 
       const nodeData = JSON.parse(jsonData);
+      const nodeDefinition = nodeDefinitions[nodeData.type];
+      
+      // Initialize config with default values
+      const config: Record<string, any> = {};
+      const inputs: Record<string, any> = {};
+      const outputs: Record<string, any> = {};
+
+      if (nodeDefinition) {
+        // Initialize inputs from node definition
+        Object.entries(nodeDefinition.settings.inputs).forEach(([key, setting]) => {
+          inputs[key] = setting.default;
+        });
+
+        // Initialize outputs from node definition
+        Object.entries(nodeDefinition.settings.outputs).forEach(([key, setting]) => {
+          outputs[key] = setting.default || 0;
+        });
+
+        // Initialize config
+        Object.entries(nodeDefinition.settings.config).forEach(([key, setting]) => {
+          config[key] = setting.default;
+        });
+      }
+
       const newNode = {
         id: `${nodeData.type}-${Date.now()}`,
         type: nodeData.type,
@@ -162,19 +187,19 @@ export const WorkflowEditor: React.FC = () => {
           name: nodeData.name,
           type: nodeData.type,
           description: nodeData.description,
-          inputs: nodeData.defaults?.inputs || { a: 0, b: 0 },
-          outputs: nodeData.defaults?.outputs || { result: 0 },
+          inputs: inputs,
+          outputs: outputs,
+          config: config
         } as NodeData,
       };
 
       addNode(newNode);
       
-      // Add this to control zoom after dropping
       if (!viewport) {
         reactFlowInstance.setViewport({
           x: 0,
           y: 0,
-          zoom: 1.0  // Set a default zoom level (1.0 = 100%)
+          zoom: 1.0
         });
       }
     } catch (error) {

@@ -28,6 +28,8 @@ export interface NodeData {
   description?: string;
   inputs: { [key: string]: any };
   outputs: { [key: string]: any };
+  config?: { [key: string]: any };
+  isActive?: boolean;
 }
 
 export type Node = ReactFlowNode<NodeData>;
@@ -55,4 +57,28 @@ export interface NodeTheme {
 export interface ThemeColors {
   vscode: NodeTheme;
   miro: NodeTheme;
+}
+
+export interface NodeSettingField {
+  type: 'number' | 'text' | 'boolean';
+  label: string;
+  default?: any;
+  description?: string;
+  optional?: boolean;
+}
+
+export interface NodeSettings {
+  inputs: Record<string, NodeSettingField>;
+  outputs: Record<string, NodeSettingField>;
+  config: Record<string, NodeSettingField>;
+}
+
+export interface NodeDefinition {
+  type: NodeType;
+  name: string;
+  icon: React.ComponentType;
+  description: string;
+  color: string;
+  category: string;
+  settings: NodeSettings;
 } 
