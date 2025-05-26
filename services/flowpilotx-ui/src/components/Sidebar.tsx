@@ -194,8 +194,8 @@ export const Sidebar: React.FC = () => {
         <button
           onClick={() => setSidebarExpanded(isCollapsed)}
           className={`
-            w-full flex items-center justify-center p-2 rounded-md 
-            transition-colors duration-200
+            w-full flex items-center justify-center px-3 py-2 rounded-md 
+            transition-all duration-200
             ${theme === 'vscode' ? 
               'bg-node-vscode-button hover:bg-node-vscode-button-hover text-node-vscode-text' : 
               'bg-node-miro-button hover:bg-node-miro-button-hover text-node-miro-text'}

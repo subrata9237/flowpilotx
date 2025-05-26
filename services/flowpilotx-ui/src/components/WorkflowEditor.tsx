@@ -20,9 +20,9 @@ import ReactFlow, {
 } from 'reactflow';
 import { useWorkflowStore } from '../store/workflowStore';
 import { BaseNode } from './BaseNode';
-import { ThemeToggle } from './ThemeToggle';
 import { NodeData } from '../types/workflow';
 import { nodeDefinitions } from '../data/nodeDefinitions';
+import { ToolbarHeader } from './ToolbarHeader';
 import 'reactflow/dist/style.css';
 
 // Create nodeTypes dynamically from nodeDefinitions
@@ -291,104 +291,101 @@ export const WorkflowEditor: React.FC = () => {
   }, [reactFlowInstance]);
 
   return (
-    <div 
-      ref={reactFlowWrapper}
-      className="flex-1 h-full"
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-    >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        defaultEdgeOptions={defaultEdgeOptions}
-        onConnect={onConnect}
-        onNodeDragStop={onNodeDragStop}
-        onInit={setReactFlowInstance}
-        onMoveEnd={onMoveEnd}
-        defaultViewport={viewport || { x: 0, y: 0, zoom: 1.0 }}
-        className={theme === 'vscode' ? 'bg-node-vscode-bg' : 'bg-node-miro-bg'}
-        minZoom={0.1}
-        maxZoom={4}
-        snapToGrid
-        snapGrid={[16, 16]}
-        fitView={false}
-        fitViewOptions={{ 
-          padding: 0.2,
-          maxZoom: 1.2,
-          duration: 200
-        }}
-        elementsSelectable={true}
-        selectNodesOnDrag={false}
-        proOptions={{ hideAttribution: true }}
-        isValidConnection={isValidConnection}
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          color={theme === 'vscode' ? '#404040' : '#E6E6E6'}
-        />
-        <Controls 
-          showFitView={true}
+    <div className="w-full h-screen flex flex-col">
+      <ToolbarHeader />
+      <div className="flex-1 h-full" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          defaultEdgeOptions={defaultEdgeOptions}
+          onConnect={onConnect}
+          onNodeDragStop={onNodeDragStop}
+          onInit={setReactFlowInstance}
+          onMoveEnd={onMoveEnd}
+          defaultViewport={viewport || { x: 0, y: 0, zoom: 1.0 }}
+          className={theme === 'vscode' ? 'bg-node-vscode-bg' : 'bg-node-miro-bg'}
+          minZoom={0.1}
+          maxZoom={4}
+          snapToGrid
+          snapGrid={[16, 16]}
+          fitView={false}
           fitViewOptions={{ 
             padding: 0.2,
             maxZoom: 1.2,
             duration: 200
           }}
-          className={`
-            ${theme === 'vscode' 
-              ? 'bg-node-vscode-bg border-node-vscode-border' 
-              : 'bg-node-miro-bg border-node-miro-border'
-            }
-            border rounded-lg shadow-lg
-          `}
-        />
-        <MiniMap
-          nodeColor={theme === 'vscode' ? '#3C3C3C' : '#F5F5F5'}
-          maskColor={theme === 'vscode' ? 'rgba(45, 45, 45, 0.9)' : 'rgba(255, 255, 255, 0.9)'}
-          className={`
-            ${theme === 'vscode' 
-              ? 'bg-node-vscode-bg border-node-vscode-border hover:border-node-vscode-selected' 
-              : 'bg-node-miro-bg border-node-miro-border hover:border-node-miro-selected'
-            }
-            border-2 rounded-lg shadow-lg transition-all duration-200
-          `}
-          style={{
-            backgroundColor: theme === 'vscode' ? '#252526' : '#FFFFFF',
-            border: `2px solid ${theme === 'vscode' ? '#454545' : '#E0E0E0'}`,
-          }}
-        />
-        <ThemeToggle />
-        {showDeleteTooltip && (
-          <Panel position="top-right" className="m-2.5">
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm
-              ${deletePressed ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-200'}
-              transition-colors duration-150`}
-            >
-              <span className="font-medium">
-                {selectedNodes.length > 0 && `${selectedNodes.length} node${selectedNodes.length > 1 ? 's' : ''}`}
-                {selectedNodes.length > 0 && selectedEdges.length > 0 && ' and '}
-                {selectedEdges.length > 0 && `${selectedEdges.length} connection${selectedEdges.length > 1 ? 's' : ''}`}
-                {' selected'}
-              </span>
-              <span className={deletePressed ? 'text-white/80' : 'text-gray-400'}>
-                Press Delete to remove
-              </span>
-            </div>
-          </Panel>
-        )}
-        {nodes.length === 0 && (
-          <Panel position="bottom-center" className="text-center">
-            <div className="px-4 py-3 bg-gray-800/80 backdrop-blur rounded-lg text-gray-200">
-              <p className="text-lg font-medium mb-2">Start Building Your Workflow</p>
-              <p className="text-sm text-gray-400">Drag nodes from the sidebar to begin</p>
-            </div>
-          </Panel>
-        )}
-      </ReactFlow>
+          elementsSelectable={true}
+          selectNodesOnDrag={false}
+          proOptions={{ hideAttribution: true }}
+          isValidConnection={isValidConnection}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={16}
+            size={1}
+            color={theme === 'vscode' ? '#404040' : '#E6E6E6'}
+          />
+          <Controls 
+            showFitView={true}
+            fitViewOptions={{ 
+              padding: 0.2,
+              maxZoom: 1.2,
+              duration: 200
+            }}
+            className={`
+              ${theme === 'vscode' 
+                ? 'bg-node-vscode-bg border-node-vscode-border' 
+                : 'bg-node-miro-bg border-node-miro-border'
+              }
+              border rounded-lg shadow-lg
+            `}
+          />
+          <MiniMap
+            nodeColor={theme === 'vscode' ? '#3C3C3C' : '#F5F5F5'}
+            maskColor={theme === 'vscode' ? 'rgba(45, 45, 45, 0.9)' : 'rgba(255, 255, 255, 0.9)'}
+            className={`
+              ${theme === 'vscode' 
+                ? 'bg-node-vscode-bg border-node-vscode-border hover:border-node-vscode-selected' 
+                : 'bg-node-miro-bg border-node-miro-border hover:border-node-miro-selected'
+              }
+              border-2 rounded-lg shadow-lg transition-all duration-200
+            `}
+            style={{
+              backgroundColor: theme === 'vscode' ? '#252526' : '#FFFFFF',
+              border: `2px solid ${theme === 'vscode' ? '#454545' : '#E0E0E0'}`,
+            }}
+          />
+          {showDeleteTooltip && (
+            <Panel position="top-right" className="m-2.5">
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm
+                ${deletePressed ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-200'}
+                transition-colors duration-150`}
+              >
+                <span className="font-medium">
+                  {selectedNodes.length > 0 && `${selectedNodes.length} node${selectedNodes.length > 1 ? 's' : ''}`}
+                  {selectedNodes.length > 0 && selectedEdges.length > 0 && ' and '}
+                  {selectedEdges.length > 0 && `${selectedEdges.length} connection${selectedEdges.length > 1 ? 's' : ''}`}
+                  {' selected'}
+                </span>
+                <span className={deletePressed ? 'text-white/80' : 'text-gray-400'}>
+                  Press Delete to remove
+                </span>
+              </div>
+            </Panel>
+          )}
+          {nodes.length === 0 && (
+            <Panel position="bottom-center" className="text-center">
+              <div className="px-4 py-3 bg-gray-800/80 backdrop-blur rounded-lg text-gray-200">
+                <p className="text-lg font-medium mb-2">Start Building Your Workflow</p>
+                <p className="text-sm text-gray-400">Drag nodes from the sidebar to begin</p>
+              </div>
+            </Panel>
+          )}
+        </ReactFlow>
+      </div>
     </div>
   );
 }; 

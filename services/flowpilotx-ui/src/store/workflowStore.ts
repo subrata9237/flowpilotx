@@ -14,6 +14,8 @@ const calculateNodeOutputs = (type: NodeType, inputs: { [key: string]: any }) =>
 
 interface WorkflowStore extends WorkflowState {
   theme: Theme;
+  editorMode: 'click' | 'pan';
+  setEditorMode: (mode: 'click' | 'pan') => void;
   isSidebarExpanded: boolean;
   sourceNodeId: string | null;
   viewport: Viewport | null;
@@ -35,10 +37,12 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   nodes: [],
   edges: [],
   theme: 'vscode', // Default theme
+  editorMode: 'click', // Default mode
   isSidebarExpanded: false, // Default sidebar state
   sourceNodeId: null, // Track source node for auto-connection
   viewport: null,
   setTheme: (theme) => set({ theme }),
+  setEditorMode: (mode) => set({ editorMode: mode }),
   setSidebarExpanded: (expanded) => {
     set({ isSidebarExpanded: expanded });
     if (!expanded) {

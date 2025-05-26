@@ -1,8 +1,8 @@
 import React from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
-import { ComputerDesktopIcon, PaintBrushIcon, SunIcon, MoonIcon } from '@heroicons/react/24/outline';
+import { SunIcon, MoonIcon } from '@heroicons/react/24/outline';
 
-export const ThemeToggle: React.FC = () => {
+export const ThemeToggleX: React.FC = () => {
   const { theme, setTheme } = useWorkflowStore();
 
   return (
