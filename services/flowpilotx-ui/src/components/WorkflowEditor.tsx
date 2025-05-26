@@ -24,11 +24,13 @@ import { NodeData } from '../types/workflow';
 import { nodeDefinitions } from '../data/nodeDefinitions';
 import { ToolbarHeader } from './ToolbarHeader';
 import 'reactflow/dist/style.css';
+import { StickyNoteNodes } from './StickyNoteNodes';
 
 // Create nodeTypes dynamically from nodeDefinitions
-const nodeTypes = Object.fromEntries(
-  Object.keys(nodeDefinitions).map(type => [type, BaseNode])
-);
+const nodeTypes = {
+  ...Object.fromEntries(Object.keys(nodeDefinitions).map(type => [type, BaseNode])),
+  sticky: StickyNoteNodes,
+};
 
 const defaultEdgeOptions = {
   animated: false,
@@ -56,6 +58,7 @@ export const WorkflowEditor: React.FC = () => {
     setEdges,
     viewport,
     setViewport,
+    showStickyNotes,
   } = useWorkflowStore();
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -65,6 +68,11 @@ export const WorkflowEditor: React.FC = () => {
 
   // Track delete key press
   const deletePressed = useKeyPress(['Delete', 'Backspace']);
+
+  // Filter nodes based on showStickyNotes state
+  const visibleNodes = nodes.filter(node => 
+    node.type !== 'sticky' || showStickyNotes
+  );
 
   // Handle select all
   useEffect(() => {
@@ -295,7 +303,8 @@ export const WorkflowEditor: React.FC = () => {
       <ToolbarHeader />
       <div className="flex-1 h-full relative" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
         <ReactFlow
-          nodes={nodes}
+          style={{ position: 'absolute', inset: 0, zIndex: 10 }}
+          nodes={visibleNodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}

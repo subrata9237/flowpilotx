@@ -1,8 +1,9 @@
-import { Node as ReactFlowNode, Edge as ReactFlowEdge, NodeChange, EdgeChange } from 'reactflow';
+import { Node as ReactFlowNode, Edge as ReactFlowEdge, NodeChange, EdgeChange, NodeProps } from 'reactflow';
 import { ReactNode } from 'react';
 import { nodeDefinitions } from '../data/nodeDefinitions';
+import React from 'react';
 
-export type NodeType = keyof typeof nodeDefinitions;
+export type NodeType = keyof typeof nodeDefinitions | 'sticky';
 
 export interface NodeTemplate {
   type: NodeType;
@@ -31,6 +32,11 @@ export interface NodeData {
   outputs: { [key: string]: any };
   config?: { [key: string]: any };
   isActive?: boolean;
+  text?: string;
+  color?: string;
+  opacity?: number;
+  width?: number;
+  height?: number;
 }
 
 export type Node = ReactFlowNode<NodeData>;
@@ -84,4 +90,8 @@ export interface NodeDefinition {
   category: string;
   calculate: (inputs: { [key: string]: any }) => { [key: string]: any };
   settings: NodeSettings;
-} 
+}
+
+export type NodeTypes = {
+  [key: string]: React.ComponentType<NodeProps<NodeData>>;
+}; 

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Node, Edge, XYPosition, Viewport } from 'reactflow';
+import { Node, Edge, XYPosition, Viewport, Position } from 'reactflow';
 import { WorkflowState, NodeUpdater, EdgeUpdater, NodeData, NodeType } from '../types/workflow';
 import { nodeDefinitions } from '../data/nodeDefinitions';
 
@@ -7,18 +7,31 @@ export type Theme = 'vscode' | 'miro';
 
 // Calculate node outputs based on type and inputs
 const calculateNodeOutputs = (type: NodeType, inputs: { [key: string]: any }) => {
+  if (type === 'sticky') return {};
   const nodeDefinition = nodeDefinitions[type];
   if (!nodeDefinition) return {};
   return nodeDefinition.calculate(inputs);
 };
 
+interface StickyNote {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+  width?: number;
+  height?: number;
+}
+
 interface WorkflowStore extends WorkflowState {
   theme: Theme;
   editorMode: 'click' | 'pan';
-  setEditorMode: (mode: 'click' | 'pan') => void;
+  stickyNotes: StickyNote[];
   isSidebarExpanded: boolean;
   sourceNodeId: string | null;
-  viewport: Viewport | null;
+  viewport: { x: number; y: number; zoom: number } | null;
+  showStickyNotes: boolean;
+  setEditorMode: (mode: 'click' | 'pan') => void;
   setTheme: (theme: Theme) => void;
   setSidebarExpanded: (expanded: boolean) => void;
   setSourceNodeId: (nodeId: string | null) => void;
@@ -30,7 +43,11 @@ interface WorkflowStore extends WorkflowState {
   setNodes: (updater: NodeUpdater) => void;
   setEdges: (updater: EdgeUpdater) => void;
   connectNodes: (sourceId: string, targetNode: Node<NodeData>) => void;
-  setViewport: (viewport: Viewport) => void;
+  setViewport: (viewport: { x: number; y: number; zoom: number } | null) => void;
+  addStickyNote: (note: Omit<StickyNote, 'id'>) => void;
+  updateStickyNote: (id: string, updates: Partial<Omit<StickyNote, 'id'>>) => void;
+  deleteStickyNote: (id: string) => void;
+  toggleStickyNotes: () => void;
 }
 
 export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
@@ -41,6 +58,8 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   isSidebarExpanded: false, // Default sidebar state
   sourceNodeId: null, // Track source node for auto-connection
   viewport: null,
+  stickyNotes: [],
+  showStickyNotes: true, // Default to showing sticky notes
   setTheme: (theme) => set({ theme }),
   setEditorMode: (mode) => set({ editorMode: mode }),
   setSidebarExpanded: (expanded) => {
@@ -139,4 +158,21 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     set(() => ({
       viewport,
     })),
+  addStickyNote: (note) => set((state) => ({
+    stickyNotes: [...state.stickyNotes, { 
+      ...note, 
+      id: `sticky-${Date.now()}`,
+      width: note.width ?? 200,
+      height: note.height ?? 120
+    }]
+  })),
+  updateStickyNote: (id, updates) => set((state) => ({
+    stickyNotes: state.stickyNotes.map(note =>
+      note.id === id ? { ...note, ...updates } : note
+    )
+  })),
+  deleteStickyNote: (id) => set((state) => ({
+    stickyNotes: state.stickyNotes.filter(note => note.id !== id)
+  })),
+  toggleStickyNotes: () => set((state) => ({ showStickyNotes: !state.showStickyNotes })),
 })); 

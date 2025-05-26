@@ -1,6 +1,6 @@
 import React from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
-import { HandRaisedIcon, CursorArrowRaysIcon } from '@heroicons/react/24/outline';
+import { HandRaisedIcon, CursorArrowRaysIcon, RectangleStackIcon, PencilSquareIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { ThemeToggleX } from './Theme';
 
 const AutomatedFlowIcon: React.FC<{ color: string }> = ({ color }) => (
@@ -29,7 +29,30 @@ export const ToolbarHeader: React.FC = () => {
   const editorMode = useWorkflowStore((state) => state.editorMode);
   const setEditorMode = useWorkflowStore((state) => state.setEditorMode);
   const theme = useWorkflowStore((state) => state.theme);
+  const addNode = useWorkflowStore((state) => state.addNode);
+  const showStickyNotes = useWorkflowStore((state) => state.showStickyNotes);
+  const toggleStickyNotes = useWorkflowStore((state) => state.toggleStickyNotes);
   const iconColor = theme === 'vscode' ? '#9B51E0' : '#F2994A';
+
+  const handleAddStickyNote = () => {
+    const newNode = {
+      id: `sticky-${Date.now()}`,
+      type: 'sticky',
+      position: { x: 100, y: 100 },
+      width: 180, // default width
+      height: 100, // default height
+      resizable: true, // enable NodeResizer
+      data: {
+        name: 'Sticky Note',
+        type: 'sticky',
+        text: '',
+        color: 'rgba(253, 230, 138, 0.45)', // Default yellow color with opacity
+        inputs: {},
+        outputs: {},
+      }
+    };
+    addNode(newNode);
+  };
 
   return (
     <header
@@ -52,8 +75,8 @@ export const ToolbarHeader: React.FC = () => {
             FlowPilotX
           </h1>
         </div>
-        {/* Center: Mode Toggle */}
-        <div className="flex items-center justify-center">
+        {/* Center: Mode Toggle + Panel Toggle + Sticky Note */}
+        <div className="flex items-center justify-center gap-2">
           <div
             className={`flex items-center gap-2 rounded-lg p-1 shadow-sm ${
               theme === 'vscode'
@@ -86,6 +109,36 @@ export const ToolbarHeader: React.FC = () => {
               title="Pan Mode - Move nodes and canvas"
             >
               <HandRaisedIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleAddStickyNote}
+              className={`px-3 py-2 rounded-md transition-colors font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
+                theme === 'vscode'
+                  ? 'text-yellow-400 hover:bg-yellow-900/20'
+                  : 'text-yellow-600 hover:bg-yellow-100'
+              }`}
+              title="Create Sticky Note"
+            >
+              <PencilSquareIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={toggleStickyNotes}
+              className={`px-3 py-2 rounded-md transition-colors font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 ${
+                theme === 'vscode'
+                  ? showStickyNotes 
+                    ? 'text-yellow-400 hover:bg-yellow-900/20'
+                    : 'text-gray-400 hover:bg-gray-900/20'
+                  : showStickyNotes
+                    ? 'text-yellow-600 hover:bg-yellow-100'
+                    : 'text-gray-600 hover:bg-gray-100'
+              }`}
+              title={showStickyNotes ? "Hide Sticky Notes" : "Show Sticky Notes"}
+            >
+              {showStickyNotes ? (
+                <EyeIcon className="w-5 h-5" />
+              ) : (
+                <EyeSlashIcon className="w-5 h-5" />
+              )}
             </button>
           </div>
         </div>
