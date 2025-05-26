@@ -182,29 +182,31 @@ export const WorkflowEditor: React.FC = () => {
     }
   }, [reactFlowInstance, addNode, viewport]);
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      const newEdge = {
-        id: `e${connection.source}-${connection.target}`,
-        source: connection.source || '',
-        target: connection.target || '',
+  // Add this function for validation
+  const isValidConnection = useCallback((connection: Connection): boolean => {
+    if (!connection.source || !connection.target) return false;
+    
+    // Check for duplicate connection
+    return !edges.some(edge => 
+      edge.source === connection.source && 
+      edge.target === connection.target
+    );
+  }, [edges]);
+
+  // Modify onConnect to handle the actual connection
+  const onConnect = useCallback((connection: Connection) => {
+    if (connection.source && connection.target) {
+      const edge: Edge = {
+        id: `${connection.source}-${connection.target}`,
+        source: connection.source,
+        target: connection.target,
         sourceHandle: connection.sourceHandle,
         targetHandle: connection.targetHandle,
-        type: 'straight',
-        style: {
-          stroke: '#555',
-          strokeWidth: 2
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: '#555',
-        },
-        className: 'react-flow__edge-path-selector'
+        type: 'straight'
       };
-      addEdge(newEdge);
-    },
-    [addEdge]
-  );
+      addEdge(edge);
+    }
+  }, [addEdge]);
 
   const onNodeDragStop: NodeDragHandler = useCallback(
     (event, node) => {
@@ -299,6 +301,7 @@ export const WorkflowEditor: React.FC = () => {
         elementsSelectable={true}
         selectNodesOnDrag={false}
         proOptions={{ hideAttribution: true }}
+        isValidConnection={isValidConnection}
       >
         <Background
           variant={BackgroundVariant.Dots}
