@@ -168,10 +168,19 @@ export const WorkflowEditor: React.FC = () => {
       };
 
       addNode(newNode);
+      
+      // Add this to control zoom after dropping
+      if (!viewport) {
+        reactFlowInstance.setViewport({
+          x: 0,
+          y: 0,
+          zoom: 1.0  // Set a default zoom level (1.0 = 100%)
+        });
+      }
     } catch (error) {
       console.error('Failed to handle node drop:', error);
     }
-  }, [reactFlowInstance, addNode]);
+  }, [reactFlowInstance, addNode, viewport]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -247,6 +256,18 @@ export const WorkflowEditor: React.FC = () => {
     setViewport(viewport);
   }, [setViewport]);
 
+  const handleFitView = useCallback(() => {
+    if (reactFlowInstance) {
+      reactFlowInstance.fitView({
+        padding: 0.5,
+        maxZoom: 1.5,
+        minZoom: 0.5,
+        duration: 800,
+        includeHiddenNodes: false
+      });
+    }
+  }, [reactFlowInstance]);
+
   return (
     <div 
       ref={reactFlowWrapper}
@@ -265,15 +286,22 @@ export const WorkflowEditor: React.FC = () => {
         onNodeDragStop={onNodeDragStop}
         onInit={setReactFlowInstance}
         onMoveEnd={onMoveEnd}
-        defaultViewport={viewport || undefined}
+        defaultViewport={viewport || { x: 0, y: 0, zoom: 1.0 }}
         className={theme === 'vscode' ? 'bg-node-vscode-bg' : 'bg-node-miro-bg'}
         minZoom={0.1}
         maxZoom={4}
         snapToGrid
         snapGrid={[16, 16]}
-        fitView={!viewport}
+        fitView={false}
+        fitViewOptions={{ 
+          padding: 0.5,
+          maxZoom: 1.5,
+          minZoom: 0.5,
+          duration: 800
+        }}
         elementsSelectable={true}
         selectNodesOnDrag={false}
+        proOptions={{ hideAttribution: true }}
       >
         <Background
           variant={BackgroundVariant.Dots}
@@ -281,10 +309,46 @@ export const WorkflowEditor: React.FC = () => {
           size={1}
           color={theme === 'vscode' ? '#404040' : '#E6E6E6'}
         />
-        <Controls />
+        <Controls 
+          showFitView={true}
+          fitViewOptions={{ 
+            padding: 0.5,
+            maxZoom: 1.5,
+            minZoom: 0.5,
+            duration: 800
+          }}
+          className={`
+            ${theme === 'vscode' 
+              ? 'bg-node-vscode-bg border-node-vscode-border' 
+              : 'bg-node-miro-bg border-node-miro-border'
+            }
+            border rounded-lg shadow-lg
+          `}
+          style={{
+            backgroundColor: theme === 'vscode' ? '#252526' : '#FFFFFF',
+            border: `1px solid ${theme === 'vscode' ? '#454545' : '#E0E0E0'}`,
+            boxShadow: theme === 'vscode' 
+              ? '0 4px 6px -1px rgba(0, 0, 0, 0.4)' 
+              : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
+        />
         <MiniMap
-          nodeColor={theme === 'vscode' ? '#2D2D2D' : '#FFFFFF'}
-          maskColor={theme === 'vscode' ? 'rgba(45, 45, 45, 0.8)' : 'rgba(255, 255, 255, 0.8)'}
+          nodeColor={theme === 'vscode' ? '#3C3C3C' : '#F5F5F5'}
+          maskColor={theme === 'vscode' ? 'rgba(45, 45, 45, 0.9)' : 'rgba(255, 255, 255, 0.9)'}
+          className={`
+            ${theme === 'vscode' 
+              ? 'bg-node-vscode-bg border-node-vscode-border hover:border-node-vscode-selected' 
+              : 'bg-node-miro-bg border-node-miro-border hover:border-node-miro-selected'
+            }
+            border-2 rounded-lg shadow-lg transition-all duration-200
+          `}
+          style={{
+            backgroundColor: theme === 'vscode' ? '#252526' : '#FFFFFF',
+            border: `2px solid ${theme === 'vscode' ? '#454545' : '#E0E0E0'}`,
+            boxShadow: theme === 'vscode' 
+              ? '0 4px 6px -1px rgba(0, 0, 0, 0.4)' 
+              : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          }}
         />
         <ThemeToggle />
         {showDeleteTooltip && (
