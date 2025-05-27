@@ -77,6 +77,7 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
         minWidth: 60,
         display: 'flex',
         flexDirection: 'column',
+        alignItems: 'stretch',
       }}
       className="group transition-all duration-200"
       tabIndex={-1}
@@ -138,11 +139,11 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
       <textarea
         value={data.text}
         onChange={e => updateNodeData(id, { ...data, text: e.target.value })}
-        className={`bg-transparent border-none outline-none resize-none font-medium text-base px-2 py-1 flex-1 ${data.text ? 'text-gray-900' : 'text-gray-500'} placeholder:text-gray-400`}
+        className={`bg-transparent border-none outline-none resize-none font-medium text-base px-2 py-1 ${data.text ? 'text-gray-900' : 'text-gray-500'} placeholder:text-gray-400`}
         style={{
-          width: '100%',
           minHeight: 32,
-          flex: 1,
+          width: '100%',
+          overflow: 'hidden',
         }}
         spellCheck={false}
       />
