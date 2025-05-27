@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useWorkflowStore } from '../store/workflowStore';
 import {
   ArrowLeftIcon,
@@ -202,6 +202,9 @@ const NodeSettingsPage: React.FC = () => {
   const nodes = useWorkflowStore((state) => state.nodes);
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
   const theme = useWorkflowStore((state) => state.theme);
+  const location = useLocation();
+  const storeWorkflowId = useWorkflowStore(state => state.currentWorkflowId);
+  const workflowId = location.state?.workflowId || storeWorkflowId;
 
   const node = nodes.find((n) => n.id === nodeId);
   const [nodeData, setNodeData] = useState(node?.data);
@@ -249,7 +252,7 @@ const NodeSettingsPage: React.FC = () => {
       setShowSuccessToast(true);
       setTimeout(() => {
         setShowSuccessToast(false);
-        navigate('/');
+        navigate(workflowId ? `/workflow/${workflowId}` : '/');
       }, 2000);
     }
   };
@@ -369,7 +372,7 @@ const NodeSettingsPage: React.FC = () => {
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(workflowId ? `/workflow/${workflowId}` : '/')}
               className={`p-2 rounded-md transition-colors ${theme === 'vscode' ? 
                 'hover:bg-node-vscode-button text-node-vscode-text' : 
                 'hover:bg-node-miro-button text-node-miro-text'}`}
@@ -540,7 +543,7 @@ const NodeSettingsPage: React.FC = () => {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(workflowId ? `/workflow/${workflowId}` : '/')}
               className={`
                 px-4 py-2 text-sm font-medium rounded-md transition-colors
                 ${theme === 'vscode' ? 

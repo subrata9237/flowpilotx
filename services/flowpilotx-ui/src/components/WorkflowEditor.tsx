@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -11,12 +11,14 @@ import ReactFlow, {
   BackgroundVariant,
   ReactFlowInstance,
   useKeyPress,
-  OnNodesChange,
-  OnEdgesChange,
+  NodeChange,
+  EdgeChange,
+  addEdge,
+  applyNodeChanges,
+  applyEdgeChanges,
+  Viewport,
   Node,
   Edge,
-  MarkerType,
-  Viewport,
 } from 'reactflow';
 import { useWorkflowStore } from '../store/workflowStore';
 import { BaseNode } from './BaseNode';
@@ -25,33 +27,16 @@ import { nodeDefinitions } from '../data/nodeDefinitions';
 import { ToolbarHeader } from './ToolbarHeader';
 import 'reactflow/dist/style.css';
 import { StickyNoteNodes } from './StickyNoteNodes';
-
-// Create nodeTypes dynamically from nodeDefinitions
-const nodeTypes = {
-  ...Object.fromEntries(Object.keys(nodeDefinitions).map(type => [type, BaseNode])),
-  sticky: StickyNoteNodes,
-};
-
-const defaultEdgeOptions = {
-  animated: false,
-  type: 'straight',
-  style: {
-    stroke: '#555',
-    strokeWidth: 2
-  },
-  markerEnd: {
-    type: MarkerType.ArrowClosed,
-    color: '#555',
-  },
-  className: 'react-flow__edge-path-selector'
-};
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { nodeTypes } from './nodes';
+import { defaultEdgeOptions } from '../utils/edgeUtils';
 
 export const WorkflowEditor: React.FC = () => {
+  const { id } = useParams();
   const { 
-    nodes, 
-    edges, 
+    nodes: storeNodes, 
+    edges: storeEdges, 
     addNode, 
-    addEdge, 
     updateNodePosition, 
     deleteNode, 
     theme, 
@@ -60,15 +45,43 @@ export const WorkflowEditor: React.FC = () => {
     setViewport,
     showStickyNotes,
     setNodes,
+    addOrUpdateWorkflow,
+    setCurrentWorkflowId,
   } = useWorkflowStore();
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<string[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [showDeleteTooltip, setShowDeleteTooltip] = useState(false);
+  const nodes = useWorkflowStore(state => state.nodes);
+  const edges = useWorkflowStore(state => state.edges);
+  const navigate = useNavigate();
+  const currentProjectId = useWorkflowStore((state) => state.currentProjectId);
+  const [workflowName, setWorkflowName] = useState('Untitled Workflow');
+  const [editingName, setEditingName] = useState(false);
+  const [hasFitView, setHasFitView] = useState(false);
 
   // Track delete key press
   const deletePressed = useKeyPress(['Delete', 'Backspace']);
+
+  // Track changes in nodes, edges, or workflow name
+  useEffect(() => {
+    if (id) {
+      const existingWorkflow = useWorkflowStore.getState().workflows.find(w => w.id === id);
+      if (existingWorkflow) {
+        // Compare current state with saved state
+        const hasChanges = 
+          JSON.stringify(existingWorkflow.nodes) !== JSON.stringify(nodes) ||
+          JSON.stringify(existingWorkflow.edges) !== JSON.stringify(edges) ||
+          existingWorkflow.name !== workflowName;
+        setHasUnsavedChanges(hasChanges);
+      }
+    } else {
+      // For new workflows, any nodes or edges means unsaved changes
+      setHasUnsavedChanges(nodes.length > 0 || edges.length > 0 || workflowName !== 'Untitled Workflow');
+    }
+  }, [nodes, edges, workflowName, id]);
 
   // Filter nodes based on showStickyNotes state
   const visibleNodes = nodes.filter(node => 
@@ -124,6 +137,8 @@ export const WorkflowEditor: React.FC = () => {
         setEdges(edges.filter(edge => !selectedEdges.includes(edge.id)));
       }
       setShowDeleteTooltip(false);
+      // Set unsaved changes after deletion
+      setHasUnsavedChanges(true);
     }, 150);
   }, [selectedNodes, selectedEdges, deleteNode, setEdges, edges]);
 
@@ -224,76 +239,49 @@ export const WorkflowEditor: React.FC = () => {
     );
   }, [edges]);
 
-  // Modify onConnect to handle the actual connection
-  const onConnect = useCallback((connection: Connection) => {
-    if (connection.source && connection.target) {
-      const edge: Edge = {
-        id: `${connection.source}-${connection.target}`,
-        source: connection.source,
-        target: connection.target,
-        sourceHandle: connection.sourceHandle,
-        targetHandle: connection.targetHandle,
-        type: 'straight'
-      };
-      addEdge(edge);
-    }
-  }, [addEdge]);
-
-  const onNodeDragStop: NodeDragHandler = useCallback(
-    (event, node) => {
-      updateNodePosition(node.id, node.position);
+  // Handle new connections
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const newEdges = addEdge({ ...connection, ...defaultEdgeOptions }, edges);
+      setEdges(newEdges);
+      // Set unsaved changes when new connection is made
+      setHasUnsavedChanges(true);
     },
-    [updateNodePosition]
+    [edges, setEdges]
   );
 
-  const onNodesChange: OnNodesChange = useCallback((changes) => {
-    changes.forEach((change) => {
-      if (change.type === 'position' && change.position && change.id) {
-        // Update node position
-        updateNodePosition(change.id, change.position);
-        
-        // Update connected edges
-        const connectedEdges = edges.filter(
-          edge => edge.source === change.id || edge.target === change.id
-        );
-        
-        if (connectedEdges.length > 0) {
-          const updatedEdges = edges.map(edge => {
-            if (edge.source === change.id || edge.target === change.id) {
-              return {
-                ...edge,
-                // This ensures smooth edge updates
-                type: 'bezier',
-                animated: false
-              };
-            }
-            return edge;
-          });
-          setEdges(updatedEdges);
-        }
-      }
-      if (change.type === 'dimensions' && change.id && change.dimensions) {
-        const { width, height } = change.dimensions;
-        if (width !== undefined && height !== undefined) {
-          setNodes((nodes) =>
-            nodes.map((node) =>
-              node.id === change.id
-                ? { ...node, width, height }
-                : node
-            )
-          );
-        }
-      }
-    });
-  }, [updateNodePosition, edges, setEdges, setNodes]);
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setNodes(nodes => applyNodeChanges(changes, nodes));
+      // Set unsaved changes when nodes are modified
+      setHasUnsavedChanges(true);
+    },
+    [setNodes]
+  );
 
-  const onEdgesChange: OnEdgesChange = useCallback((changes) => {
-    changes.forEach((change) => {
-      if (change.type === 'add' && change.item) {
-        addEdge(change.item as Edge);
-      }
-    });
-  }, [addEdge]);
+  const onNodeDrag = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      setNodes(nodes => 
+        nodes.map(n => 
+          n.id === node.id 
+            ? { ...n, position: node.position }
+            : n
+        )
+      );
+      // Set unsaved changes when node is dragged
+      setHasUnsavedChanges(true);
+    },
+    [setNodes]
+  );
+
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      setEdges(edges => applyEdgeChanges(changes, edges));
+      // Set unsaved changes when edges are modified
+      setHasUnsavedChanges(true);
+    },
+    [setEdges]
+  );
 
   // Save viewport on change
   const onMoveEnd = useCallback((event: any, viewport: Viewport) => {
@@ -310,28 +298,95 @@ export const WorkflowEditor: React.FC = () => {
     }
   }, [reactFlowInstance]);
 
+  // For new workflow
+  useEffect(() => {
+    if (!id) {
+      setNodes([]);
+      setEdges([]);
+    }
+  }, [id, setNodes, setEdges]);
+
+  // For existing workflow
+  useEffect(() => {
+    if (id) {
+      // Find and set the workflow name from the workflows array
+      const existingWorkflow = useWorkflowStore.getState().workflows.find(w => w.id === id);
+      if (existingWorkflow) {
+        setWorkflowName(existingWorkflow.name);
+      }
+    }
+  }, [id, setWorkflowName]);
+
+  // Add fitView effect ONLY when workflow loads (not on every node change)
+  useEffect(() => {
+    if (reactFlowInstance && nodes.length > 0 && !hasFitView) {
+      reactFlowInstance.fitView({
+        padding: 0.2,
+        maxZoom: 1.2,
+        duration: 0
+      });
+      setHasFitView(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reactFlowInstance, id, nodes, hasFitView]);
+
+  // Reset the flag when workflow id changes
+  useEffect(() => {
+    setHasFitView(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (id) setCurrentWorkflowId(id);
+    else setCurrentWorkflowId(null);
+  }, [id, setCurrentWorkflowId]);
+
+  const handleSave = () => {
+    const workflowId = id || currentProjectId;
+    if (!workflowId) {
+      console.error('No workflow ID available');
+      return;
+    }
+
+    addOrUpdateWorkflow({
+      id: workflowId,
+      name: workflowName,
+      nodes,
+      edges,
+      updatedAt: Date.now(),
+    });
+
+    setHasUnsavedChanges(false);
+
+    if (!id) {
+      navigate(`/workflow/${workflowId}`);
+    }
+  };
+
   return (
     <div className="w-full h-screen flex flex-col">
-      <ToolbarHeader />
+      <ToolbarHeader
+        handleSave={handleSave}
+        workflowName={workflowName}
+        setWorkflowName={setWorkflowName}
+        editingName={editingName}
+        setEditingName={setEditingName}
+        hasUnsavedChanges={hasUnsavedChanges}
+      />
       <div className="flex-1 h-full relative" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
         <ReactFlow
           style={{ position: 'absolute', inset: 0, zIndex: 10 }}
-          nodes={visibleNodes}
+          nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          defaultEdgeOptions={defaultEdgeOptions}
           onConnect={onConnect}
-          onNodeDragStop={onNodeDragStop}
+          onNodeDrag={onNodeDrag}
           onInit={setReactFlowInstance}
           onMoveEnd={onMoveEnd}
           defaultViewport={viewport || { x: 0, y: 0, zoom: 1.0 }}
           className={theme === 'vscode' ? 'bg-node-vscode-bg' : 'bg-node-miro-bg'}
           minZoom={0.1}
           maxZoom={4}
-          snapToGrid
-          snapGrid={[16, 16]}
           fitView={false}
           fitViewOptions={{ 
             padding: 0.2,
@@ -342,6 +397,22 @@ export const WorkflowEditor: React.FC = () => {
           selectNodesOnDrag={false}
           proOptions={{ hideAttribution: true }}
           isValidConnection={isValidConnection}
+          nodeTypes={nodeTypes}
+          defaultEdgeOptions={{
+            ...defaultEdgeOptions,
+            animated: false,
+            style: { strokeWidth: 2 },
+            interactionWidth: 20,
+          }}
+          edgesUpdatable={true}
+          edgesFocusable={true}
+          nodesDraggable={true}
+          nodesConnectable={true}
+          zoomOnScroll={true}
+          panOnScroll={true}
+          zoomOnDoubleClick={true}
+          preventScrolling={true}
+          attributionPosition="bottom-right"
         >
           <Background
             variant={BackgroundVariant.Dots}

@@ -19,6 +19,7 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
   const setSidebarExpanded = useWorkflowStore(state => state.setSidebarExpanded);
   const setSourceNodeId = useWorkflowStore(state => state.setSourceNodeId);
   const sourceNodeId = useWorkflowStore(state => state.sourceNodeId);
+  const currentWorkflowId = useWorkflowStore(state => state.currentWorkflowId);
   const [isActive, setIsActive] = useState(true);
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -53,7 +54,7 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
 
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigate(`/node/${id}/settings`);
+    navigate(`/node/${id}/settings`, { state: { workflowId: currentWorkflowId } });
   };
 
   const isVSCode = theme === 'vscode';
@@ -182,3 +183,4 @@ export const BaseNode = memo<NodeProps<NodeData>>(({ data, selected, id, type })
     </div>
   );
 });
+ 

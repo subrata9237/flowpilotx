@@ -95,40 +95,40 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
       {/* Minimal header for color and delete */}
       <div className="flex items-center justify-between px-2 py-1 group/header" style={{ minHeight: 32 }}>
         <div className="flex items-center gap-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowColors(!showColors);
-            }}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowColors(!showColors);
+          }}
             className="w-4 h-4 rounded-full border-2 border-gray-300 hover:border-gray-500 opacity-0 group-hover:opacity-100 group-hover/header:opacity-100 transition-opacity duration-200"
-            style={{ background: `rgba(${rgb},${opacity})` }}
-            title="Change color"
-          />
-          {showColors && (
+          style={{ background: `rgba(${rgb},${opacity})` }}
+          title="Change color"
+        />
+      {showColors && (
             <div className="flex items-center gap-1 ml-2" onClick={e => e.stopPropagation()}>
-              {COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={e => {
-                    e.stopPropagation();
+          {COLORS.map(c => (
+            <button
+              key={c}
+              onClick={e => {
+                e.stopPropagation();
                     const newColor = `rgba(${c},${opacity})`;
                     updateNodeData(id, { ...data, color: newColor });
-                    setShowColors(false);
-                  }}
+                setShowColors(false);
+              }}
                   className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${(data.color || 'rgba(255, 255, 204, 1)').startsWith(`rgba(${c}`) ? 'ring-2 ring-yellow-400/80 border-yellow-400/80' : 'border-transparent hover:border-yellow-400/50'}`}
-                  style={{ background: `rgba(${c},${opacity})` }}
-                  tabIndex={-1}
-                  aria-label={`Set color rgba(${c},${opacity})`}
-                />
-              ))}
-              <button
-                onClick={handleChangeOpacity}
-                className="w-4 h-4 rounded-full bg-white/70 text-xs flex items-center justify-center border border-gray-300 hover:bg-white/90 transition-all duration-200 ml-2"
-                title="Change opacity"
-                style={{ fontSize: '0.9em' }}
-              >
-                <span role="img" aria-label="opacity">💧</span>
-              </button>
+              style={{ background: `rgba(${c},${opacity})` }}
+              tabIndex={-1}
+              aria-label={`Set color rgba(${c},${opacity})`}
+            />
+          ))}
+          <button
+            onClick={handleChangeOpacity}
+            className="w-4 h-4 rounded-full bg-white/70 text-xs flex items-center justify-center border border-gray-300 hover:bg-white/90 transition-all duration-200 ml-2"
+            title="Change opacity"
+            style={{ fontSize: '0.9em' }}
+          >
+            <span role="img" aria-label="opacity">💧</span>
+          </button>
             </div>
           )}
         </div>

@@ -23,6 +23,14 @@ interface StickyNote {
   height?: number;
 }
 
+interface SavedWorkflow {
+  id: string;
+  name: string;
+  nodes: Node[];
+  edges: Edge[];
+  updatedAt: number;
+}
+
 interface WorkflowStore extends WorkflowState {
   theme: Theme;
   editorMode: 'click' | 'pan';
@@ -31,6 +39,9 @@ interface WorkflowStore extends WorkflowState {
   sourceNodeId: string | null;
   viewport: { x: number; y: number; zoom: number } | null;
   showStickyNotes: boolean;
+  workflows: SavedWorkflow[];
+  currentProjectId: string | null;
+  currentWorkflowId: string | null;
   setEditorMode: (mode: 'click' | 'pan') => void;
   setTheme: (theme: Theme) => void;
   setSidebarExpanded: (expanded: boolean) => void;
@@ -48,6 +59,11 @@ interface WorkflowStore extends WorkflowState {
   updateStickyNote: (id: string, updates: Partial<Omit<StickyNote, 'id'>>) => void;
   deleteStickyNote: (id: string) => void;
   toggleStickyNotes: () => void;
+  addOrUpdateWorkflow: (workflow: SavedWorkflow) => void;
+  deleteWorkflow: (workflowId: string) => void;
+  getWorkflows: () => SavedWorkflow[];
+  setCurrentProjectId: (id: string | null) => void;
+  setCurrentWorkflowId: (id: string | null) => void;
 }
 
 export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
@@ -60,6 +76,9 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   viewport: null,
   stickyNotes: [],
   showStickyNotes: true, // Default to showing sticky notes
+  workflows: [],
+  currentProjectId: null,
+  currentWorkflowId: null,
   setTheme: (theme) => set({ theme }),
   setEditorMode: (mode) => set({ editorMode: mode }),
   setSidebarExpanded: (expanded) => {
@@ -175,4 +194,25 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     stickyNotes: state.stickyNotes.filter(note => note.id !== id)
   })),
   toggleStickyNotes: () => set((state) => ({ showStickyNotes: !state.showStickyNotes })),
+  addOrUpdateWorkflow: (workflow) => set((state) => {
+    const existing = state.workflows.find(w => w.id === workflow.id);
+    if (existing) {
+      return {
+        workflows: state.workflows.map(w => w.id === workflow.id ? { ...workflow, updatedAt: Date.now() } : w)
+      };
+    } else {
+      return {
+        workflows: [
+          ...state.workflows,
+          { ...workflow, updatedAt: Date.now() }
+        ]
+      };
+    }
+  }),
+  deleteWorkflow: (workflowId) => set((state) => ({
+    workflows: state.workflows.filter(w => w.id !== workflowId)
+  })),
+  getWorkflows: () => get().workflows,
+  setCurrentProjectId: (id) => set({ currentProjectId: id }),
+  setCurrentWorkflowId: (id) => set({ currentWorkflowId: id }),
 })); 

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOMServer from 'react-dom/server';
 import { NodeTemplate } from '../types/workflow';
 import { useWorkflowStore } from '../store/workflowStore';
 import {
@@ -92,7 +93,9 @@ export const Sidebar: React.FC = () => {
       type: node.type,
       name: node.name,
       description: node.description,
-      defaults: node.defaults
+      defaults: node.defaults,
+      category: node.category,
+      color: node.color
     }));
     event.dataTransfer.effectAllowed = 'move';
 
@@ -103,23 +106,18 @@ export const Sidebar: React.FC = () => {
       w-16 h-16 rounded-lg shadow-lg flex items-center justify-center border-2
       ${isVSCode ? 'bg-[#1e1e1e] border-[#454545]' : 'bg-white border-gray-200'}
     `;
-    
-    // Create icon element
+
+    // Render the icon using ReactDOMServer
     const iconDiv = document.createElement('div');
     iconDiv.className = 'w-8 h-8 flex items-center justify-center';
-    const iconColor = node.type === 'add' 
-      ? (isVSCode ? '#9B51E0' : '#9B51E0') 
-      : (isVSCode ? '#F2994A' : '#F2994A');
-    
-    iconDiv.innerHTML = node.type === 'add' 
-      ? `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="${iconColor}" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>`
-      : `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="${iconColor}" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>`;
-    
+    iconDiv.innerHTML = ReactDOMServer.renderToString(
+      React.createElement(node.icon, { className: 'w-6 h-6' })
+    );
+
     preview.appendChild(iconDiv);
     document.body.appendChild(preview);
     event.dataTransfer.setDragImage(preview, 32, 32);
-    
-    // Remove the preview element after a short delay
+
     setTimeout(() => document.body.removeChild(preview), 100);
   };
 
