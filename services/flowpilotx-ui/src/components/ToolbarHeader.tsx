@@ -57,7 +57,7 @@ export const ToolbarHeader: React.FC<ToolbarHeaderProps> = ({
   const handleAddStickyNote = () => {
     const newNode = {
       id: `sticky-${Date.now()}`,
-      type: 'sticky',
+      type: 'stickyNote',
       position: { x: 100, y: 100 },
       width: 180, // default width
       height: 100, // default height

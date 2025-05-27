@@ -84,13 +84,10 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
       tabIndex={-1}
     >
       <NodeResizer
-        color="#888"
+      //color transparent
+        color="rgba(255, 255, 255, 0)"
         isVisible={selected}
-        minWidth={120}
-        minHeight={60}
-        maxWidth={400}
-        maxHeight={300}
-        handleStyle={{ borderRadius: 6, width: 12, height: 12 }}
+        handleStyle={{ borderRadius: 60, width: 12, height: 12 }}
       />
       {/* Minimal header for color and delete */}
       <div className="flex items-center justify-between px-2 py-1 group/header" style={{ minHeight: 32 }}>
