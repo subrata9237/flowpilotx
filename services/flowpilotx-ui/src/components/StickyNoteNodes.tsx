@@ -73,10 +73,8 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
         boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         borderRadius: 8,
         padding: 0,
-        minHeight: 60,
-        minWidth: 120,
-        maxWidth: 400,
-        maxHeight: 300,
+        minHeight: 32,
+        minWidth: 60,
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -84,7 +82,6 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
       tabIndex={-1}
     >
       <NodeResizer
-      //color transparent
         color="rgba(255, 255, 255, 0)"
         isVisible={selected}
         handleStyle={{ borderRadius: 60, width: 12, height: 12 }}
@@ -142,13 +139,9 @@ export const StickyNoteNodes: React.FC<NodeProps<NodeData>> = ({ id, data, selec
         value={data.text}
         onChange={e => updateNodeData(id, { ...data, text: e.target.value })}
         className={`bg-transparent border-none outline-none resize-none font-medium text-base px-2 py-1 flex-1 ${data.text ? 'text-gray-900' : 'text-gray-500'} placeholder:text-gray-400`}
-        placeholder=""
         style={{
           width: '100%',
-          height: '100%',
           minHeight: 32,
-          maxHeight: 240,
-          overflow: 'auto',
           flex: 1,
         }}
         spellCheck={false}
